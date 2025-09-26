@@ -16,8 +16,8 @@ player:
 # Point cloud processing
 point_cloud:
   voxel_size: 0.4
-  max_range: 50.0
-  min_range: 0.5
+  max_range: 60.0
+  min_range: 0.1
 
 # Feature extraction
 feature_extraction:
@@ -30,9 +30,9 @@ feature_extraction:
 
 # Odometry settings
 odometry:
-  max_iterations: 20
+  max_iterations: 10
   convergence_threshold: 0.001
-  max_correspondence_distance: 5.0  # KITTI is large scale environment
+  max_correspondence_distance: 1.0  # KITTI is large scale environment
   
 # Robust estimation settings
 robust_estimation:
@@ -43,13 +43,13 @@ robust_estimation:
   mad_multiplier: 1.4826             # MAD to std conversion factor
   cauchy_multiplier: 2.3849          # Cauchy loss multiplier
   huber_multiplier: 1.345            # Huber loss multiplier
-  min_scale_factor: 0.01              # PKO alpha lower bound
-  max_scale_factor: 1.0                # PKO alpha upper bound
+  min_scale_factor: 0.5              # PKO alpha lower bound
+  max_scale_factor: 10.0                # PKO alpha upper bound
   
   # PKO (Probabilistic Kernel Optimization) parameters
   num_alpha_segments: 100
-  truncated_threshold: 1.0         # 백업과 동일하게 10.0으로 수정
-  gmm_components: 3
+  truncated_threshold: 10.0         # 백업과 동일하게 10.0으로 수정
+  gmm_components: 5
   gmm_sample_size: 100               # 10% of typical data size
   pko_kernel_type: "cauchy"    # 백업과 동일한 cauchy kernel 사용
 
@@ -70,6 +70,8 @@ viewer:
   point_size: 2.0
   feature_point_size: 5.0
   trajectory_width: 2.0
+  coordinate_frame_size: 20.0    # Larger coordinate frame size
+  coordinate_frame_width: 16.0   # Thicker coordinate frame lines
   auto_mode: false  # Step mode for debugging
   show_point_cloud: true   # Enable original point cloud
   show_features: true      # Enable features display

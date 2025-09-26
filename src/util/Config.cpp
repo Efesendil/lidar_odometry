@@ -242,6 +242,12 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         if (config_map.find("viewer.show_coordinate_frame") != config_map.end()) {
             m_config.show_coordinate_frame = (config_map["viewer.show_coordinate_frame"] == "true");
         }
+        if (config_map.find("viewer.coordinate_frame_size") != config_map.end()) {
+            m_config.coordinate_frame_size = std::stod(config_map["viewer.coordinate_frame_size"]);
+        }
+        if (config_map.find("viewer.coordinate_frame_width") != config_map.end()) {
+            m_config.coordinate_frame_width = std::stod(config_map["viewer.coordinate_frame_width"]);
+        }
         if (config_map.find("viewer.show_grid") != config_map.end()) {
             m_config.show_grid = (config_map["viewer.show_grid"] == "true");
         }

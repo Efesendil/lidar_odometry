@@ -192,7 +192,8 @@ private:
      */
     bool optimize_pose(const ICPCorrespondenceVector& correspondences,
                       const ICPPose& initial_pose,
-                      ICPPose& optimized_pose);
+                      ICPPose& optimized_pose,
+                      double normalization_scale = 1.0);
     
     /**
      * @brief Check convergence based on pose change

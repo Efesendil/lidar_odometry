@@ -191,6 +191,8 @@ private:
     float m_point_size;                                 ///< Point cloud point size
     float m_feature_point_size;                        ///< Feature point size
     float m_trajectory_width;                          ///< Trajectory line width
+    float m_coordinate_frame_size;                     ///< Coordinate frame axis length
+    float m_coordinate_frame_width;                    ///< Coordinate frame line width
     
     // ===== State =====
     bool m_initialized;                                 ///< Initialization state

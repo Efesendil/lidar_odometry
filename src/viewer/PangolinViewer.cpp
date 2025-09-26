@@ -42,6 +42,8 @@ PangolinViewer::PangolinViewer()
     , m_point_size(1.0f)
     , m_feature_point_size(5.0f)
     , m_trajectory_width(2.0f)
+    , m_coordinate_frame_size(3.0f)
+    , m_coordinate_frame_width(4.0f)
     , m_initialized(false)
     , m_finish_pressed(false)
     , m_step_forward_pressed(false)
@@ -50,8 +52,13 @@ PangolinViewer::PangolinViewer()
     try {
         const auto& config = util::ConfigManager::instance().get_config();
         m_top_view_follow = config.top_view_follow;
-        spdlog::info("[PangolinViewer] Config applied - top_view_follow: {}", 
-                    config.top_view_follow);
+        
+        // Apply coordinate frame settings
+        m_coordinate_frame_size = static_cast<float>(config.coordinate_frame_size);
+        m_coordinate_frame_width = static_cast<float>(config.coordinate_frame_width);
+        
+        spdlog::info("[PangolinViewer] Config applied - top_view_follow: {}, coord_size: {}, coord_width: {}", 
+                    config.top_view_follow, m_coordinate_frame_size, m_coordinate_frame_width);
         
         // Debug: Check if settings are properly applied
         spdlog::info("[PangolinViewer] UI state - top_view_follow: {}", 
@@ -477,25 +484,23 @@ void PangolinViewer::draw_grid() {
 }
 
 void PangolinViewer::draw_coordinate_axes() {
-    const float axis_length = 3.0f;  // Longer axes for LiDAR scale
-    
-    glLineWidth(4.0f);
+    glLineWidth(m_coordinate_frame_width);
     glBegin(GL_LINES);
     
     // X axis - Red
     glColor3f(1.0f, 0.0f, 0.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(axis_length, 0.0f, 0.0f);
+    glVertex3f(m_coordinate_frame_size, 0.0f, 0.0f);
     
     // Y axis - Green
     glColor3f(0.0f, 1.0f, 0.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, axis_length, 0.0f);
+    glVertex3f(0.0f, m_coordinate_frame_size, 0.0f);
     
     // Z axis - Blue
     glColor3f(0.0f, 0.0f, 1.0f);
     glVertex3f(0.0f, 0.0f, 0.0f);
-    glVertex3f(0.0f, 0.0f, axis_length);
+    glVertex3f(0.0f, 0.0f, m_coordinate_frame_size);
     
     glEnd();
     glLineWidth(1.0f);

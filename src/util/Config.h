@@ -82,6 +82,8 @@ struct SystemConfig {
     bool show_features = true;                      ///< Show extracted features
     bool show_trajectory = true;                    ///< Show camera trajectory
     bool show_coordinate_frame = true;              ///< Show coordinate frames
+    double coordinate_frame_size = 3.0;             ///< Coordinate frame axis length
+    double coordinate_frame_width = 4.0;            ///< Coordinate frame line width
     bool show_grid = true;                          ///< Show reference grid
     bool follow_camera = false;                     ///< Follow camera mode
     bool top_view_follow = false;                   ///< Top-down view follow mode

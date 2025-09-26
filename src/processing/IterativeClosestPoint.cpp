@@ -66,6 +66,7 @@ bool IterativeClosestPoint::align(ICPPointCloudConstPtr source_cloud,
     double prev_cost = std::numeric_limits<double>::max();
     bool converged = false;
     ICPCorrespondenceVector correspondences;  // Move outside the loop
+    double residual_normalization_scale = 1.0;  // Initialize normalization scale
     
     for (int iteration = 0; iteration < m_config.max_iterations && !converged; ++iteration) {
         // Find correspondences
@@ -90,9 +91,35 @@ bool IterativeClosestPoint::align(ICPPointCloudConstPtr source_cloud,
             break;
         }
         
+        // Calculate residual normalization scale on first iteration only
+        if (iteration == 0 && m_adaptive_estimator && m_adaptive_estimator->get_config().use_adaptive_m_estimator) {
+            std::vector<double> residuals_for_scale;
+            residuals_for_scale.reserve(correspondences.size());
+            for (const auto& corr : correspondences) {
+                if (corr.is_valid) {
+                    residuals_for_scale.push_back(corr.distance);
+                }
+            }
+            
+            if (!residuals_for_scale.empty()) {
+                // Calculate standard deviation for normalization (similar to delta_ch = std / 6.0)
+                double mean = std::accumulate(residuals_for_scale.begin(), residuals_for_scale.end(), 0.0) / residuals_for_scale.size();
+                double variance = 0.0;
+                for (double val : residuals_for_scale) {
+                    variance += (val - mean) * (val - mean);
+                }
+                variance /= residuals_for_scale.size();
+                double std_dev = std::sqrt(variance);
+                
+                residual_normalization_scale = std_dev / 6.0;  // Same as delta_ch in reference code
+                
+                spdlog::debug("[ICP] Residual normalization scale calculated: {:.6f}", residual_normalization_scale);
+            }
+        }
+        
         // Optimize pose
         ICPPose optimized_pose;
-        if (!optimize_pose(correspondences, current_pose, optimized_pose)) {
+        if (!optimize_pose(correspondences, current_pose, optimized_pose, residual_normalization_scale)) {
             spdlog::error("Pose optimization failed at iteration {}", iteration);
             break;
         }
@@ -309,7 +336,8 @@ size_t IterativeClosestPoint::reject_outliers(ICPCorrespondenceVector& correspon
 
 bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& correspondences,
                                          const ICPPose& initial_pose,
-                                         ICPPose& optimized_pose) {
+                                         ICPPose& optimized_pose,
+                                         double normalization_scale) {
     // Convert SE3 pose to 6D tangent space representation using SE3GlobalParameterization
     // Normalize rotation matrix to ensure orthogonality before creating SE3
     Eigen::Matrix3d rotation_d = initial_pose.rotationMatrix().cast<double>();
@@ -336,16 +364,21 @@ bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& corresp
         residuals.reserve(correspondences.size());
         for (const auto& corr : correspondences) {
             if (corr.is_valid) {
-                residuals.push_back(corr.distance);
+                // Normalize residuals using the scale calculated in first iteration
+                double normalized_residual = corr.distance / std::max(normalization_scale, 1e-6);
+                residuals.push_back(normalized_residual);
             }
         }
         
         if (!residuals.empty()) {
-            // Calculate scale factor using AdaptiveMEstimator
+            // Calculate scale factor using AdaptiveMEstimator on normalized residuals
             double scale_factor = m_adaptive_estimator->calculate_scale_factor(residuals);
             
             // Use scale factor as Huber loss delta
             huber_delta = scale_factor;
+            
+            spdlog::debug("[ICP] Using normalized residuals with scale {:.6f}, delta={:.6f}", 
+                         normalization_scale, huber_delta);
         }
     }
     
