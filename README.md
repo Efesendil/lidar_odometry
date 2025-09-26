@@ -5,16 +5,15 @@ This is a real-time LiDAR odometry system designed for SLAM applications. It uti
 The system incorporates **Probabilistic Kernel Optimization (PKO)** for robust state estimation, as described in:
 
 > S. Choi and T.-W. Kim, "Probabilistic Kernel Optimization for Robust State Estimation," *IEEE Robotics and Automation Letters*, vol. 10, no. 3, pp. 2998-3005, 2025, doi: 10.1109/LRA.2025.3536294.
+> 
+> **Paper**: [https://ieeexplore.ieee.org/document/10857458](https://ieeexplore.ieee.org/document/10857458)
 
 ## Features
 
 - ⚡ Real-time LiDAR odometry processing
 - 🎯 Feature-based point cloud registration
 - 🔧 Ceres Solver-based optimization
-- 📊 3D trajectory visualization with Pangolin
-- 🗂️ KITTI dataset support
-- 🔄 Iterative Closest Point (ICP) algorithm
-- 📈 Adaptive M-estimator for robust estimation
+- 📈 Adaptive M-estimator for robust estimation (PKO)
 
 ## Quick Start
 

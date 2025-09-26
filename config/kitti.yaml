@@ -1,7 +1,7 @@
-# Data paths - Update these paths to your dataset location
-data_directory: "/path/to/your/kitti_dataset/sequences"
-ground_truth_directory: "/path/to/your/kitti_dataset/poses"  
-output_directory: "./results"
+# Data paths
+data_directory: "/home/eugene/data/KITTI/Velodyne"
+ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
+output_directory: "/home/eugene/data/KITTI/Result"
 seq: "07"
 
 # Player settings
@@ -38,7 +38,7 @@ odometry:
 robust_estimation:
   use_adaptive_m_estimator: true
   loss_type: "cauchy"                 # "cauchy", "huber"
-  scale_method: "MAD"                 # "MAD", "fixed", "PKO"
+  scale_method: "PKO"                 # "MAD", "fixed", "PKO"
   fixed_scale_factor: 1.0
   mad_multiplier: 1.4826             # MAD to std conversion factor
   cauchy_multiplier: 2.3849          # Cauchy loss multiplier
