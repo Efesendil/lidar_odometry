@@ -2,7 +2,7 @@
 data_directory: "/home/eugene/data/KITTI/Velodyne"
 ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
 output_directory: "/home/eugene/data/KITTI/Result"
-seq: "01"
+seq: "07"
 
 # Player settings
 player:
@@ -32,8 +32,8 @@ feature_extraction:
 # Odometry settings
 odometry:
   max_iterations: 10
-  translation_threshold: 0.001        # Translation convergence threshold (meters)
-  rotation_threshold: 0.001           # Rotation convergence threshold (radians)
+  translation_threshold: 0.005        # Translation convergence threshold (meters)
+  rotation_threshold: 0.005           # Rotation convergence threshold (radians)
   max_correspondence_distance: 1.0  # KITTI is large scale environment
   
 # Robust estimation settings
@@ -45,7 +45,7 @@ robust_estimation:
   # PKO (Probabilistic Kernel Optimization) parameters
   num_alpha_segments: 100
   truncated_threshold: 10.0
-  gmm_components: 3
+  gmm_components: 2
   gmm_sample_size: 100               # 10% of typical data size
   pko_kernel_type: "huber"          # PKO kernel type ("cauchy", "huber")
 
