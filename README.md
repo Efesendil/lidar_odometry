@@ -21,7 +21,7 @@ The system incorporates **Probabilistic Kernel Optimization (PKO)** for robust s
 
 #### Native Build (Ubuntu 22.04)
 ```bash
-git clone <repository-url>
+git clone https://github.com/93won/lidar_odometry
 cd lidar_odometry
 chmod +x build.sh
 ./build.sh
@@ -29,7 +29,7 @@ chmod +x build.sh
 
 #### Docker Build
 ```bash
-git clone <repository-url>
+git clone https://github.com/93won/lidar_odometry
 cd lidar_odometry
 chmod +x docker.sh
 ./docker.sh
