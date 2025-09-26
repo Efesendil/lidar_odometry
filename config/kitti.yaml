@@ -45,7 +45,7 @@ robust_estimation:
   # PKO (Probabilistic Kernel Optimization) parameters
   num_alpha_segments: 100
   truncated_threshold: 10.0
-  gmm_components: 3
+  gmm_components: 2
   gmm_sample_size: 100               # 10% of typical data size
   pko_kernel_type: "huber"          # PKO kernel type ("cauchy", "huber")
 

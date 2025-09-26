@@ -258,22 +258,32 @@ double AdaptiveMEstimator::calculate_pko_scale_factor(const std::vector<double>&
     double best_cost = std::numeric_limits<double>::max();
     
     // 모든 alpha candidates를 고려하여 최적의 JS divergence를 찾음
-    for (size_t i = 0; i < m_alpha_candidates.size(); ++i) {
+    for (size_t i = 1; i < m_alpha_candidates.size(); ++i) {
         double alpha = m_alpha_candidates[i];
 
-        if(alpha >= m_alpha_star_ref)
-            continue;
+        // if(alpha >= m_alpha_star_ref)
+        //     continue;
         
         double js_divergence = calculate_js_divergence(residuals, alpha);
+
+        // spdlog::info("[AdaptiveMEstimator] Alpha: {:.6f}, JS Divergence: {:.6f}", alpha, js_divergence);
         
         if (js_divergence < best_cost) {
             best_cost = js_divergence;
             best_alpha = alpha;
         }
     }
+
+    // spdlog::error("Best Alpha: {:.6f}, Best JS Divergence: {:.6f}", best_alpha, best_cost);
     
     // Update reference alpha
     m_alpha_star_ref = best_alpha;
+    
+    // Update last scale factor BEFORE logging histogram
+    m_last_scale_factor = best_alpha;
+    
+    // Log residual histogram with updated scale factor
+    log_residual_histogram(residuals);
 
     // spdlog::info("[AdaptiveMEstimator] Selected PKO scale factor (alpha*): {:.6f}, JS Divergence: {:.6f}", best_alpha, best_cost);
     
@@ -282,8 +292,7 @@ double AdaptiveMEstimator::calculate_pko_scale_factor(const std::vector<double>&
 
 
 void AdaptiveMEstimator::fit_gmm(const std::vector<double>& residuals) {
-    // Log residual histogram
-    log_residual_histogram(residuals);
+    // Remove histogram logging from here - it will be done after best alpha calculation
     
     if (residuals.empty()) {
         return;
