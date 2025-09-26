@@ -2,7 +2,7 @@
 data_directory: "/home/eugene/data/KITTI/Velodyne"
 ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
 output_directory: "/home/eugene/data/KITTI/Result"
-seq: "07"
+seq: "03"
 
 # Player settings
 player:
@@ -39,7 +39,7 @@ odometry:
 # Robust estimation settings
 robust_estimation:
   use_adaptive_m_estimator: true
-  min_scale_factor: 1.0              # PKO alpha lower bound
+  min_scale_factor: 0.1              # PKO alpha lower bound
   max_scale_factor: 10.0             # PKO alpha upper bound
   
   # PKO (Probabilistic Kernel Optimization) parameters

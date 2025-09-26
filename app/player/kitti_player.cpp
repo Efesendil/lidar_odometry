@@ -139,13 +139,13 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
                 ++context.current_idx;
                 ++context.processed_frames;
                 
-                // // Sleep in auto mode for real-time visualization
-                // if (context.auto_play) {
-                //     double sleep_time_ms = 100 - total_time_ms;
-                //     if (sleep_time_ms > 0) {
-                //         std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
-                //     }
-                // }
+                // Sleep in auto mode for real-time visualization
+                if (context.auto_play) {
+                    double sleep_time_ms = 100 - total_time_ms;
+                    if (sleep_time_ms > 0) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
+                    }
+                }
             }
         }
         
