@@ -70,8 +70,8 @@ viewer:
   point_size: 2.0
   feature_point_size: 5.0
   trajectory_width: 2.0
-  coordinate_frame_size: 20.0    # Larger coordinate frame size
-  coordinate_frame_width: 16.0   # Thicker coordinate frame lines
+  coordinate_frame_size: 5    # Larger coordinate frame size
+  coordinate_frame_width: 4   # Thicker coordinate frame lines
   auto_mode: false  # Step mode for debugging
   show_point_cloud: true   # Enable original point cloud
   show_features: true      # Enable features display

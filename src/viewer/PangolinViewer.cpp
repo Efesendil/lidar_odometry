@@ -660,8 +660,8 @@ void PangolinViewer::draw_current_pose() {
     glPointSize(1.0f);
     
     // Draw coordinate frame at current pose
-    const float axis_length = 0.5f;
-    glLineWidth(3.0f);
+    const float axis_length = 3.0;
+    glLineWidth(10.0f);
     glBegin(GL_LINES);
     
     // X-axis (Red)
@@ -683,7 +683,7 @@ void PangolinViewer::draw_current_pose() {
     glVertex3f(z_axis.x(), z_axis.y(), z_axis.z());
     
     glEnd();
-    glLineWidth(1.0f);
+    glLineWidth(10.0f);
 }
 
 void PangolinViewer::draw_current_pose_with_frame(std::shared_ptr<database::LidarFrame> frame) {
@@ -703,8 +703,8 @@ void PangolinViewer::draw_current_pose_with_frame(std::shared_ptr<database::Lida
     glPointSize(1.0f);
     
     // Draw coordinate frame at current pose
-    const float axis_length = 0.5f;
-    glLineWidth(3.0f);
+    const float axis_length = 3.0f;
+    glLineWidth(6.0f);
     glBegin(GL_LINES);
     
     // X-axis (Red)

@@ -15,10 +15,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Set OpenGL preference to avoid warnings
 set(OpenGL_GL_PREFERENCE GLVND)
 
-# Compiler flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+# Compiler flags - suppress warnings
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")  # Disable all warnings
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -w")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -w")
 
 # Find system packages
 find_package(PkgConfig REQUIRED)
@@ -35,7 +35,12 @@ set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
 set(BUILD_PANGOLIN_EXAMPLES OFF CACHE BOOL "Build Pangolin examples" FORCE)
 set(BUILD_PANGOLIN_TESTS OFF CACHE BOOL "Build Pangolin tests" FORCE)
 set(BUILD_PANGOLIN_TOOLS OFF CACHE BOOL "Build Pangolin tools" FORCE)
+
+# Disable warnings for Pangolin
+set(CMAKE_CXX_FLAGS_BACKUP ${CMAKE_CXX_FLAGS})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 add_subdirectory(${THIRDPARTY_DIR}/pangolin ${CMAKE_BINARY_DIR}/pangolin EXCLUDE_FROM_ALL)
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_BACKUP})
 
 # Sophus is header-only, no need to build
 # Just include the headers
@@ -51,9 +56,12 @@ set(BUILD_TESTING OFF CACHE BOOL "Build Ceres tests" FORCE)
 set(SUITESPARSE OFF CACHE BOOL "Enable SuiteSparse" FORCE)
 set(PROVIDE_UNINSTALL_TARGET OFF CACHE BOOL "Disable Ceres uninstall target" FORCE)
 
-# Prevent finding system Ceres
+# Prevent finding system Ceres and disable warnings for Ceres
 set(CMAKE_DISABLE_FIND_PACKAGE_Ceres ON)
+set(CMAKE_CXX_FLAGS_BACKUP ${CMAKE_CXX_FLAGS})
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 add_subdirectory(${CERES_DIR} ${CMAKE_BINARY_DIR}/ceres EXCLUDE_FROM_ALL)
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS_BACKUP})
 
 # Include directories
 include_directories(
