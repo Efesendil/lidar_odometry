@@ -38,7 +38,7 @@ odometry:
 robust_estimation:
   use_adaptive_m_estimator: true
   loss_type: "cauchy"                 # "cauchy", "huber"
-  scale_method: "PKO"                 # "MAD", "fixed", "PKO"
+  scale_method: "MAD"                 # "MAD", "fixed", "PKO"
   fixed_scale_factor: 1.0
   mad_multiplier: 1.4826             # MAD to std conversion factor
   cauchy_multiplier: 2.3849          # Cauchy loss multiplier

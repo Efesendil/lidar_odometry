@@ -2,10 +2,6 @@
 
 This is a real-time LiDAR odometry system designed for SLAM applications. It utilizes feature extraction from point clouds, iterative closest point (ICP) registration, sliding window optimization with Ceres Solver, and Pangolin for 3D visualization.
 
-## License
-
-This project is licensed under the 🚀MIT License🚀 - see the [LICENSE](LICENSE) file for details.
-
 ## Features
 
 - ⚡ Real-time LiDAR odometry processing
@@ -16,96 +12,82 @@ This project is licensed under the 🚀MIT License🚀 - see the [LICENSE](LICEN
 - 🔄 Iterative Closest Point (ICP) algorithm
 - 📈 Adaptive M-estimator for robust estimation
 
-## Installation
+## Quick Start
 
-📋 **[Installation Guide](docs/Install.md)** - Complete installation instructions for both Docker and native builds
+### 1. Build Options
 
-## Dataset Download
+#### Native Build (Ubuntu 22.04)
+```bash
+git clone <repository-url>
+cd lidar_odometry
+chmod +x build.sh
+./build.sh
+```
 
-📁 **[Dataset Download Guide](docs/Download_Dataset.md)** - KITTI dataset download and preparation
+#### Docker Build
+```bash
+git clone <repository-url>
+cd lidar_odometry
+chmod +x docker.sh
+./docker.sh
 
-## Running the Application
+# Run with Docker
+docker run -it --rm \
+    -v /tmp/.X11-unix:/tmp/.X11-unix \
+    -e DISPLAY=$DISPLAY \
+    -v $(pwd):/workspace \
+    lidar_odometry:latest
+```
 
-🚀 **[Running Examples](docs/Running_Example.md)** - Usage examples and configuration
+### 2. Download Sample Data
 
-## Performance Analysis and Evaluation
+Download the sample KITTI sequence 07 from [Google Drive](https://drive.google.com/drive/folders/13YL4H9EIfL8oq1bVp0Csm0B7cMF3wT_0?usp=sharing) and extract to `data/kitti/`
 
-📊 **[Performance Analysis Guide](docs/Performance_Analysis.md)** - Comprehensive performance evaluation and benchmarking
+### 3. Update Configuration
+
+Edit `config/kitti.yaml` to set your dataset path:
+```yaml
+dataset:
+  path: "/path/to/your/kitti_dataset"
+  sequence: "07"  # Change this to your sequence
+```
+
+### 4. Run LiDAR Odometry
+
+```bash
+cd build
+./lidar_odometry ../config/kitti.yaml
+```
+
+## Full KITTI Dataset
+
+For complete evaluation, download the full KITTI dataset from:
+- **Official Website**: [http://www.cvlibs.net/datasets/kitti/](http://www.cvlibs.net/datasets/kitti/)
+- **Odometry Dataset**: [http://www.cvlibs.net/datasets/kitti/eval_odometry.php](http://www.cvlibs.net/datasets/kitti/eval_odometry.php)
 
 ## Project Structure
 
-The source code is organized into the following directories:
-
-- `app/`: Main application entry points
-  - `kitti_lidar_odometry.cpp`: Main LiDAR odometry application
-  - `player/`: KITTI dataset player utilities
-- `src/`:
-  - `database/`: Data structures for `LidarFrame` and point cloud management
-  - `processing/`: Core odometry modules, including `Estimator`, `FeatureExtractor`, and `IterativeClosestPoint`
-  - `optimization/`: Ceres Solver cost functions and optimization parameters
-  - `viewer/`: Pangolin-based 3D visualization
-  - `util/`: Utility functions for configuration, math operations, and data types
+- `app/`: Main application and KITTI dataset player
+- `src/`: Core modules (database, processing, optimization, viewer, util)
 - `thirdparty/`: External libraries (Ceres, Pangolin, Sophus, spdlog)
-- `config/`: Configuration files for KITTI dataset processing
-- `docs/`: Detailed documentation guides
-
-## Quick Start
-
-1. **Clone and Build**:
-   ```bash
-   git clone <repository-url>
-   cd lidar_odometry
-   chmod +x build.sh
-   ./build.sh
-   ```
-
-2. **Download Sample Data**:
-   Download the sample KITTI sequence 07 from [Google Drive](https://drive.google.com/drive/folders/13YL4H9EIfL8oq1bVp0Csm0B7cMF3wT_0?usp=sharing) and extract to `data/kitti/`
-
-3. **Run LiDAR Odometry**:
-   ```bash
-   cd build
-   ./lidar_odometry ../config/kitti.yaml
-   ```
-
-## Configuration
-
-The system uses YAML configuration files located in the `config/` directory:
-- `kitti.yaml`: Configuration for KITTI dataset processing
+- `config/`: Configuration files
+- `build.sh`: Build script for native compilation
 
 ## Dependencies
 
-- **PCL** (Point Cloud Library) - Point cloud processing
-- **Eigen3** - Linear algebra operations
+- **PCL** (Point Cloud Library)
+- **Eigen3** - Linear algebra
 - **Ceres Solver** - Non-linear optimization
 - **Pangolin** - 3D visualization
 - **OpenGL** - Graphics rendering
-- **YAML-cpp** - Configuration file parsing
+- **YAML-cpp** - Configuration parsing
 
 ## System Requirements
 
 - **Ubuntu 20.04/22.04** (recommended)
 - **C++17 Compiler** (g++ or clang++)
 - **CMake** (>= 3.16)
-- **CUDA** (optional, for GPU acceleration)
 
-## Contributing
+## License
 
-Contributions are welcome! Please feel free to submit issues and pull requests.
-
-## References
-
-This project implements various LiDAR odometry techniques based on the following concepts:
-
-- Feature extraction from LiDAR point clouds
-- Iterative Closest Point (ICP) registration
-- Sliding window optimization
-- Robust estimation with M-estimators
-
-## Troubleshooting
-
-For common issues and solutions, please refer to the [Installation Guide](docs/Install.md) or open an issue.
-
-## Acknowledgments
-
-Special thanks to the open-source community and the developers of the third-party libraries used in this project.
+This project is released under the MIT License.
