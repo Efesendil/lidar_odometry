@@ -27,7 +27,7 @@ namespace viewer {
 PangolinViewer::PangolinViewer()
     : m_should_stop(false)
     , m_thread_ready(false)
-    , m_auto_mode("ui.1. Auto Mode", false, true)
+    , m_auto_mode("ui.1. Auto Mode", true, true)
     , m_show_map_points("ui.2. Show Map Points (Gray)", true, true)
     , m_show_point_cloud("ui.3. Show Point Cloud (Red-Blue)", true, true)
     , m_show_features("ui.4. Show Features (Mint)", true, true)

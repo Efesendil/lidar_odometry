@@ -261,8 +261,8 @@ double AdaptiveMEstimator::calculate_pko_scale_factor(const std::vector<double>&
     for (size_t i = 1; i < m_alpha_candidates.size(); ++i) {
         double alpha = m_alpha_candidates[i];
 
-        // if(alpha >= m_alpha_star_ref)
-        //     continue;
+        if(alpha >= m_alpha_star_ref)
+            continue;
         
         double js_divergence = calculate_js_divergence(residuals, alpha);
 

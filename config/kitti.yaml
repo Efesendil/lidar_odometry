@@ -2,7 +2,7 @@
 data_directory: "/home/eugene/data/KITTI/Velodyne"
 ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
 output_directory: "/home/eugene/data/KITTI/Result"
-seq: "07"
+seq: "01"
 
 # Player settings
 player:
@@ -45,7 +45,7 @@ robust_estimation:
   # PKO (Probabilistic Kernel Optimization) parameters
   num_alpha_segments: 100
   truncated_threshold: 10.0
-  gmm_components: 2
+  gmm_components: 3
   gmm_sample_size: 100               # 10% of typical data size
   pko_kernel_type: "huber"          # PKO kernel type ("cauchy", "huber")
 
@@ -59,8 +59,8 @@ estimator:
 
 # Viewer settings
 viewer:
-  viewer_width: 2000
-  viewer_height: 1500
+  viewer_width: 3000
+  viewer_height: 2000
   point_size: 2.0
   feature_point_size: 5.0
   trajectory_width: 2.0
