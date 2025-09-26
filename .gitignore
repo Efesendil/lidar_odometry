@@ -1,0 +1,25 @@
+# Build directories
+build/
+
+# Third-party build directories
+thirdparty/*/build/
+thirdparty/ceres-solver/build/
+thirdparty/pangolin/build/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Compiled objects
+*.o
+*.so
+*.a
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+

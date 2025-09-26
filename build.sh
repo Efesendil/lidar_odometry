@@ -1,0 +1,133 @@
+#!/bin/bash
+
+set -e  # Exit on any error
+
+echo "=============================================="
+echo "         LiDAR Odometry Build Script"
+echo "=============================================="
+
+# Get number of CPU cores for parallel compilation (use half of available cores)
+NPROC=$(($(nproc) / 2))
+if [ $NPROC -lt 1 ]; then
+    NPROC=1
+fi
+echo "Using $NPROC cores for compilation (half of available)"
+
+# Install system dependencies
+echo ""
+echo "Step 0: Installing system dependencies..."
+echo "========================================"
+sudo apt update
+sudo apt install -y \
+    cmake \
+    build-essential \
+    libeigen3-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libglew-dev \
+    libgflags-dev \
+    libgoogle-glog-dev \
+    libatlas-base-dev \
+    libsuitesparse-dev \
+    libpcl-dev \
+    libyaml-cpp-dev
+
+echo "System dependencies installed successfully!"
+
+# Build third-party dependencies
+echo ""
+echo "Step 1: Building third-party dependencies..."
+echo "=============================================="
+
+# Check if thirdparty directory exists
+if [ ! -d "thirdparty" ]; then
+    echo "Error: thirdparty directory not found!"
+    echo "Please ensure the thirdparty directory with dependencies exists."
+    exit 1
+fi
+
+# Build Ceres Solver
+echo "Building Ceres Solver..."
+if [ ! -d "thirdparty/ceres-solver/build" ]; then
+    mkdir -p thirdparty/ceres-solver/build
+fi
+cd thirdparty/ceres-solver/build
+cmake .. \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_BENCHMARKS=OFF \
+    -DUSE_TBB=OFF \
+    -DUSE_OPENMP=ON \
+    -DSUITESPARSE=OFF \
+    -DCXSPARSE=OFF \
+    -DMINIGLOG=ON \
+    -DEIGENSPARSE=ON \
+    -DPROVIDE_UNINSTALL_TARGET=OFF
+make -j$NPROC
+cd ../../..
+
+# Build Pangolin (using existing source)
+echo "Building Pangolin..."
+if [ ! -d "thirdparty/pangolin/build" ]; then
+    mkdir -p thirdparty/pangolin/build
+fi
+cd thirdparty/pangolin/build
+cmake .. \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_TOOLS=OFF \
+    -DBUILD_PYPANGOLIN=OFF \
+    -DBUILD_PANGOLIN_PYTHON=OFF
+make -j$NPROC
+cd ../../..
+
+# Build Sophus
+echo "Building Sophus..."
+if [ ! -d "thirdparty/Sophus/build" ]; then
+    mkdir -p thirdparty/Sophus/build
+fi
+cd thirdparty/Sophus/build
+cmake .. \
+    -DBUILD_TESTS=OFF \
+    -DBUILD_SOPHUS_TESTS=OFF \
+    -DBUILD_SOPHUS_EXAMPLES=OFF
+make -j$NPROC
+cd ../../..
+
+# Build spdlog
+echo "Building spdlog..."
+if [ ! -d "thirdparty/spdlog/build" ]; then
+    mkdir -p thirdparty/spdlog/build
+fi
+cd thirdparty/spdlog/build
+cmake .. \
+    -DSPDLOG_BUILD_EXAMPLE=OFF \
+    -DSPDLOG_BUILD_TESTS=OFF \
+    -DSPDLOG_BUILD_BENCH=OFF
+make -j$NPROC
+cd ../../..
+
+# Build main project
+echo ""
+echo "Step 2: Building main project..."
+echo "================================="
+
+# Create build directory for main project
+if [ ! -d "build" ]; then
+    mkdir build
+fi
+
+cd build
+
+# Configure and build main project
+cmake ../src
+make -j$NPROC
+
+echo ""
+echo "=============================================="
+echo "  Build completed successfully!"
+echo "=============================================="
+echo ""
+echo "To run the LiDAR odometry system:"
+echo "  cd build"
+echo "  ./lidar_odometry ../config/kitti.yaml"
+echo ""
