@@ -1,4 +1,4 @@
-# LiDAR Odometry
+# LiDAR Odometry with Probabilistic Kernel Optimization (PKO)
 
 This is a real-time LiDAR odometry system designed for SLAM applications. It utilizes feature extraction from point clouds, iterative closest point (ICP) registration, sliding window optimization with Ceres Solver, and Pangolin for 3D visualization.
 
