@@ -96,7 +96,6 @@ public:
      */
     static Sophus::SE3f tangent_d_to_se3f(const Eigen::Vector6d& tangent_d);
 
-private:
     /**
      * @brief Convert SE3 tangent space vector to SE3 group element
      * @param tangent SE3 tangent space vector [translation, so3] (Ceres order)
@@ -110,6 +109,8 @@ private:
      * @return SE3 tangent space vector [translation, so3] (Ceres order)
      */
     static Eigen::Vector6d se3_to_tangent(const Sophus::SE3d& se3);
+
+private:
 
     bool m_is_fixed;  // Flag to prevent parameter updates when true
 };

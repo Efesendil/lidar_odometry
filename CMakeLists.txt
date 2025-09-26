@@ -37,17 +37,11 @@ set(BUILD_PANGOLIN_TESTS OFF CACHE BOOL "Build Pangolin tests" FORCE)
 set(BUILD_PANGOLIN_TOOLS OFF CACHE BOOL "Build Pangolin tools" FORCE)
 add_subdirectory(${THIRDPARTY_DIR}/pangolin ${CMAKE_BINARY_DIR}/pangolin EXCLUDE_FROM_ALL)
 
-# Build Sophus from thirdparty
-set(BUILD_TESTS OFF CACHE BOOL "Build Sophus tests" FORCE)
-set(BUILD_SOPHUS_TESTS OFF CACHE BOOL "Build Sophus tests" FORCE)
-set(BUILD_SOPHUS_EXAMPLES OFF CACHE BOOL "Build Sophus examples" FORCE)
-add_subdirectory(${THIRDPARTY_DIR}/Sophus ${CMAKE_BINARY_DIR}/Sophus)
+# Sophus is header-only, no need to build
+# Just include the headers
 
-# Build spdlog from thirdparty
-set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Build spdlog examples" FORCE)
-set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Build spdlog tests" FORCE)
-set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Build spdlog benchmarks" FORCE)
-add_subdirectory(${THIRDPARTY_DIR}/spdlog ${CMAKE_BINARY_DIR}/spdlog)
+# spdlog is header-only, no need to build
+# Just include the headers
 
 # Build Ceres from thirdparty
 set(CERES_DIR ${THIRDPARTY_DIR}/ceres-solver)
@@ -122,8 +116,6 @@ target_link_libraries(lidar_odometry
     GLEW::GLEW
     Threads::Threads
     ceres
-    Sophus::Sophus
-    spdlog::spdlog
     pango_display
     pango_windowing
     pango_opengl

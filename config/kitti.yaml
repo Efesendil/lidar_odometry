@@ -43,8 +43,8 @@ robust_estimation:
   mad_multiplier: 1.4826             # MAD to std conversion factor
   cauchy_multiplier: 2.3849          # Cauchy loss multiplier
   huber_multiplier: 1.345            # Huber loss multiplier
-  min_scale_factor: 0.0001              # PKO alpha lower bound
-  max_scale_factor: 0.1                # PKO alpha upper bound
+  min_scale_factor: 0.01              # PKO alpha lower bound
+  max_scale_factor: 1.0                # PKO alpha upper bound
   
   # PKO (Probabilistic Kernel Optimization) parameters
   num_alpha_segments: 100

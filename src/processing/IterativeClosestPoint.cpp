@@ -11,6 +11,7 @@
 
 #include "IterativeClosestPoint.h"
 #include "../optimization/Factors.h"
+#include "../optimization/Parameters.h"
 #include "../util/MathUtils.h"
 #include <spdlog/spdlog.h>
 #include <pcl/common/transforms.h>
@@ -71,7 +72,7 @@ bool IterativeClosestPoint::align(ICPPointCloudConstPtr source_cloud,
         correspondences.clear();  // Clear previous correspondences
         size_t num_correspondences = find_correspondences(source_cloud, target_cloud, current_pose, correspondences);
         
-        if (num_correspondences < m_config.min_correspondence_points) {
+        if (num_correspondences < static_cast<size_t>(m_config.min_correspondence_points)) {
             spdlog::warn("Insufficient correspondences: {} < {}", 
                         num_correspondences, m_config.min_correspondence_points);
             break;
@@ -83,7 +84,7 @@ bool IterativeClosestPoint::align(ICPPointCloudConstPtr source_cloud,
         m_statistics.inlier_count = num_inliers;
         m_statistics.match_ratio = static_cast<double>(num_inliers) / source_cloud->size();
         
-        if (num_inliers < m_config.min_correspondence_points) {
+        if (num_inliers < static_cast<size_t>(m_config.min_correspondence_points)) {
             spdlog::warn("Insufficient inliers after outlier rejection: {} < {}", 
                         num_inliers, m_config.min_correspondence_points);
             break;
@@ -156,7 +157,7 @@ size_t IterativeClosestPoint::find_correspondences(ICPPointCloudConstPtr source_
     ICPPointCloud transformed_source;
     pcl::transformPointCloud(*source_cloud, transformed_source, current_pose.matrix());
     
-    const int K = 20; // Number of nearest neighbors for plane fitting
+    const int K = 5; // Number of nearest neighbors for plane fitting
     size_t valid_correspondences = 0;
     
     for (size_t i = 0; i < transformed_source.size(); ++i) {
@@ -309,19 +310,21 @@ size_t IterativeClosestPoint::reject_outliers(ICPCorrespondenceVector& correspon
 bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& correspondences,
                                          const ICPPose& initial_pose,
                                          ICPPose& optimized_pose) {
-    // Convert SE3 pose to 6D tangent space representation
-    Eigen::Vector3d translation = initial_pose.translation().cast<double>();
-    Eigen::Matrix3d rotation = initial_pose.rotationMatrix().cast<double>();
+    // Convert SE3 pose to 6D tangent space representation using SE3GlobalParameterization
+    // Normalize rotation matrix to ensure orthogonality before creating SE3
+    Eigen::Matrix3d rotation_d = initial_pose.rotationMatrix().cast<double>();
+    Eigen::Matrix3d normalized_rotation = util::MathUtils::normalize_rotation_matrix(rotation_d);
     
-    // Normalize rotation matrix using MathUtils to ensure orthogonality
-    Eigen::Matrix3d normalized_rotation = util::MathUtils::normalize_rotation_matrix(rotation);
-    Sophus::SO3d so3(normalized_rotation);
-    Eigen::Vector3d rotation_log = so3.log();
+    Sophus::SE3d initial_se3(normalized_rotation, 
+                             initial_pose.translation().cast<double>());
+    
+    // Use SE3GlobalParameterization helper to convert to tangent space
+    Eigen::Vector6d pose_tangent = optimization::SE3GlobalParameterization::se3_to_tangent(initial_se3);
     
     // Pose parameters in tangent space [tx, ty, tz, rx, ry, rz]
     double pose_params[6] = {
-        translation.x(), translation.y(), translation.z(),
-        rotation_log.x(), rotation_log.y(), rotation_log.z()
+        pose_tangent[0], pose_tangent[1], pose_tangent[2],
+        pose_tangent[3], pose_tangent[4], pose_tangent[5]
     };
     
     // Calculate adaptive Huber loss delta using AdaptiveMEstimator
@@ -388,6 +391,9 @@ bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& corresp
         }
     }
     
+    // Add SE3 parameterization to handle manifold constraints
+    problem.SetParameterization(pose_params, new optimization::SE3GlobalParameterization());
+    
     // Solver options
     ceres::Solver::Options options;
     options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
@@ -399,19 +405,14 @@ bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& corresp
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     
-    // Extract optimized pose from tangent space
-    Eigen::Vector3d opt_translation(pose_params[0], pose_params[1], pose_params[2]);
-    Eigen::Vector3d opt_rotation_log(pose_params[3], pose_params[4], pose_params[5]);
+    // Extract optimized pose from tangent space using SE3GlobalParameterization
+    Eigen::Map<const Eigen::Vector6d> optimized_tangent(pose_params);
+    Sophus::SE3d optimized_se3 = optimization::SE3GlobalParameterization::tangent_to_se3(optimized_tangent);
     
-    Sophus::SO3d opt_so3 = Sophus::SO3d::exp(opt_rotation_log);
-    Eigen::Matrix3f opt_rotation = opt_so3.matrix().cast<float>();
+    // Convert back to ICPPose (float)
+    optimized_pose = ICPPose(optimized_se3.rotationMatrix().cast<float>(), 
+                           optimized_se3.translation().cast<float>());
     
-    // Normalize rotation matrix using SVD to ensure orthogonality
-    Eigen::Matrix3f R_normalized = util::MathUtils::normalize_rotation_matrix(opt_rotation);
-    
-    ICPVector3f opt_trans = opt_translation.cast<float>();
-    
-    optimized_pose = ICPPose(R_normalized, opt_trans);
     return true;
 }
 

@@ -80,31 +80,9 @@ cmake .. \
 make -j$NPROC
 cd ../../..
 
-# Build Sophus
-echo "Building Sophus..."
-if [ ! -d "thirdparty/Sophus/build" ]; then
-    mkdir -p thirdparty/Sophus/build
-fi
-cd thirdparty/Sophus/build
-cmake .. \
-    -DBUILD_TESTS=OFF \
-    -DBUILD_SOPHUS_TESTS=OFF \
-    -DBUILD_SOPHUS_EXAMPLES=OFF
-make -j$NPROC
-cd ../../..
+# Sophus is header-only, no need to build
 
-# Build spdlog
-echo "Building spdlog..."
-if [ ! -d "thirdparty/spdlog/build" ]; then
-    mkdir -p thirdparty/spdlog/build
-fi
-cd thirdparty/spdlog/build
-cmake .. \
-    -DSPDLOG_BUILD_EXAMPLE=OFF \
-    -DSPDLOG_BUILD_TESTS=OFF \
-    -DSPDLOG_BUILD_BENCH=OFF
-make -j$NPROC
-cd ../../..
+# spdlog is header-only, no need to build
 
 # Build main project
 echo ""
