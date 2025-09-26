@@ -2,6 +2,10 @@
 
 This is a real-time LiDAR odometry system designed for SLAM applications. It utilizes feature extraction from point clouds, iterative closest point (ICP) registration, sliding window optimization with Ceres Solver, and Pangolin for 3D visualization.
 
+The system incorporates **Probabilistic Kernel Optimization (PKO)** for robust state estimation, as described in:
+
+> S. Choi and T.-W. Kim, "Probabilistic Kernel Optimization for Robust State Estimation," *IEEE Robotics and Automation Letters*, vol. 10, no. 3, pp. 2998-3005, 2025, doi: 10.1109/LRA.2025.3536294.
+
 ## Features
 
 - ⚡ Real-time LiDAR odometry processing
@@ -45,11 +49,13 @@ Download the sample KITTI sequence 07 from [Google Drive](https://drive.google.c
 
 ### 3. Update Configuration
 
-Edit `config/kitti.yaml` to set your dataset path:
+Edit `config/kitti.yaml` to set your dataset paths:
 ```yaml
-dataset:
-  path: "/path/to/your/kitti_dataset"
-  sequence: "07"  # Change this to your sequence
+# Data paths - Update these paths to your dataset location
+data_directory: "/path/to/your/kitti_dataset/sequences"
+ground_truth_directory: "/path/to/your/kitti_dataset/poses"  
+output_directory: "/path/to/your/output/directory"
+seq: "07"  # Change this to your sequence number
 ```
 
 ### 4. Run LiDAR Odometry
@@ -91,3 +97,19 @@ For complete evaluation, download the full KITTI dataset from:
 ## License
 
 This project is released under the MIT License.
+
+## References
+
+```bibtex
+@ARTICLE{10857458,
+  author={Choi, Seungwon and Kim, Tae-Wan},
+  journal={IEEE Robotics and Automation Letters}, 
+  title={Probabilistic Kernel Optimization for Robust State Estimation}, 
+  year={2025},
+  volume={10},
+  number={3},
+  pages={2998-3005},
+  keywords={Kernel;Optimization;State estimation;Probabilistic logic;Tuning;Robustness;Cost function;Point cloud compression;Oceans;Histograms;Robust state estimation;SLAM},
+  doi={10.1109/LRA.2025.3536294}
+}
+```
