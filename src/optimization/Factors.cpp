@@ -65,8 +65,12 @@ bool PointToPlaneFactor::Evaluate(double const* const* parameters,
         // Compute point-to-plane distance: residual = n^T * (p_corrected - q)
         double raw_residual = n.dot(p_corrected - q);
         
-        // Apply information weighting and robust weighting
-        residuals[0] = m_information_weight * m_robust_weight * raw_residual;
+        // Apply only information weighting (normalization)
+        // Robust weighting is handled by Ceres Loss Function
+        residuals[0] = m_information_weight * raw_residual;
+
+        // spdlog::warn("Check residual: raw={:.6f}, weighted={:.6f}, info_weight={:.6f}", 
+        //              raw_residual, residuals[0], m_information_weight);
         
         // Compute analytical jacobians if requested
         if (jacobians && jacobians[0]) {
@@ -87,8 +91,9 @@ bool PointToPlaneFactor::Evaluate(double const* const* parameters,
                      -Rp(1), Rp(0), 0;
             Eigen::Vector3d jac_rotation = -n.transpose() * Rp_skew;
             
-            // Combine jacobians with weighting
-            double weight = m_information_weight * m_robust_weight;
+            // Combine jacobians with weighting (only information weight)
+            // Robust weighting is handled by Ceres Loss Function
+            double weight = m_information_weight;
             jac.block<1, 3>(0, 0) = weight * jac_translation.transpose(); // translation
             jac.block<1, 3>(0, 3) = weight * jac_rotation.transpose();    // rotation
         }

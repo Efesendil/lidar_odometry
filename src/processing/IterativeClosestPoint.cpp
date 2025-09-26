@@ -67,6 +67,7 @@ bool IterativeClosestPoint::align(ICPPointCloudConstPtr source_cloud,
     bool converged = false;
     ICPCorrespondenceVector correspondences;  // Move outside the loop
     double residual_normalization_scale = 1.0;  // Initialize normalization scale
+
     
     for (int iteration = 0; iteration < m_config.max_iterations && !converged; ++iteration) {
         // Find correspondences
@@ -338,6 +339,8 @@ bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& corresp
                                          const ICPPose& initial_pose,
                                          ICPPose& optimized_pose,
                                          double normalization_scale) {
+
+    m_adaptive_estimator->reset();
     // Convert SE3 pose to 6D tangent space representation using SE3GlobalParameterization
     // Normalize rotation matrix to ensure orthogonality before creating SE3
     Eigen::Matrix3d rotation_d = initial_pose.rotationMatrix().cast<double>();
@@ -388,12 +391,15 @@ bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& corresp
     for (const auto& corr : correspondences) {
         if (!corr.is_valid) continue;
         
-        // Create PointToPlaneFactor
+        // Calculate normalization weight for residual
+        double normalization_weight = 1.0 / std::max(normalization_scale, 1e-6);
+        
+        // Create PointToPlaneFactor with normalization weight
         auto factor = new optimization::PointToPlaneFactor(
             corr.source_point,
             corr.target_point,
             corr.plane_normal,
-            1.0  // Always use unit weight, robustness comes from adaptive Huber delta
+            normalization_weight  // Apply normalization through weight
         );
         
         if (m_config.use_robust_loss) {
@@ -412,7 +418,8 @@ bool IterativeClosestPoint::optimize_pose(const ICPCorrespondenceVector& corresp
                     loss_function = new ceres::CauchyLoss(huber_delta);
                 }
                 
-                spdlog::debug("[ICP] Using {} loss function with delta={:.6f}", loss_type, huber_delta);
+                spdlog::debug("[ICP] Using {} loss function with delta={:.6f}, normalization_weight={:.6f}", 
+                             loss_type, huber_delta, normalization_weight);
             } else {
                 // Default to Huber loss if no adaptive estimator
                 loss_function = new ceres::HuberLoss(huber_delta);

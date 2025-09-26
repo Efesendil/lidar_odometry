@@ -72,9 +72,6 @@ double AdaptiveMEstimator::calculate_scale_factor(
 
     scale_factor = calculate_pko_scale_factor(residuals);
 
-    // Clamp scale factor to reasonable range
-    // scale_factor = std::max(m_config.min_scale_factor, ::min(scale_factor, m_config.max_scale_factor));
-
     // Update last computed scale factor
     m_last_scale_factor = scale_factor;
     
@@ -94,6 +91,7 @@ double AdaptiveMEstimator::calculate_weight(double residual, double scale_factor
 
 void AdaptiveMEstimator::reset() {
     m_last_scale_factor = m_config.min_scale_factor;
+    m_alpha_star_ref = m_config.max_scale_factor;
 }
 
 
@@ -262,6 +260,9 @@ double AdaptiveMEstimator::calculate_pko_scale_factor(const std::vector<double>&
     // 모든 alpha candidates를 고려하여 최적의 JS divergence를 찾음
     for (size_t i = 0; i < m_alpha_candidates.size(); ++i) {
         double alpha = m_alpha_candidates[i];
+
+        if(alpha >= m_alpha_star_ref)
+            continue;
         
         double js_divergence = calculate_js_divergence(residuals, alpha);
         
@@ -273,6 +274,8 @@ double AdaptiveMEstimator::calculate_pko_scale_factor(const std::vector<double>&
     
     // Update reference alpha
     m_alpha_star_ref = best_alpha;
+
+    // spdlog::info("[AdaptiveMEstimator] Selected PKO scale factor (alpha*): {:.6f}, JS Divergence: {:.6f}", best_alpha, best_cost);
     
     return best_alpha;
 }
@@ -848,58 +851,58 @@ void AdaptiveMEstimator::log_residual_histogram(const std::vector<double>& resid
     
     // Log histogram with three distributions
 
-    SPDLOG_INFO("                                | [Residual Distribution] | [   P_data(inlier|r)  ] |         [P_model(inlier|r,c)]        |");
-    SPDLOG_INFO("                                |-------------------------|-------------------------|--------------------------------------|");
+    // SPDLOG_INFO("                                | [Residual Distribution] | [   P_data(inlier|r)  ] |         [P_model(inlier|r,c)]        |");
+    // SPDLOG_INFO("                                |-------------------------|-------------------------|--------------------------------------|");
 
-    // Find maximum count for proper normalization
-    int max_count = *std::max_element(bins.begin(), bins.end());
+    // // Find maximum count for proper normalization
+    // int max_count = *std::max_element(bins.begin(), bins.end());
     
-    for (int i = 0; i < num_bins; ++i) {
-        double bin_start = min_val + i * bin_width;
-        double bin_end = min_val + (i + 1) * bin_width;
-        int count = bins[i];
-        double percentage = 100.0 * count / residuals.size();
+    // for (int i = 0; i < num_bins; ++i) {
+    //     double bin_start = min_val + i * bin_width;
+    //     double bin_end = min_val + (i + 1) * bin_width;
+    //     int count = bins[i];
+    //     double percentage = 100.0 * count / residuals.size();
         
-        // Calculate average weight for this bin
-        double avg_weight = 0.0;
-        if (weight_counts[i] > 0) {
-            avg_weight = weight_sums[i] / weight_counts[i];
-        }
+    //     // Calculate average weight for this bin
+    //     double avg_weight = 0.0;
+    //     if (weight_counts[i] > 0) {
+    //         avg_weight = weight_sums[i] / weight_counts[i];
+    //     }
         
-        // Create residual distribution bar (max 25 chars, normalized to max count)
-        const int max_bar_width = 25;
-        int residual_bar_length = 0;
-        if (max_count > 0) {
-            residual_bar_length = static_cast<int>((static_cast<double>(count) / max_count) * max_bar_width);
-        }
-        residual_bar_length = std::min(residual_bar_length, max_bar_width);
-        std::string residual_bar(residual_bar_length, '*');
-        residual_bar.resize(max_bar_width, ' ');
+    //     // Create residual distribution bar (max 25 chars, normalized to max count)
+    //     const int max_bar_width = 25;
+    //     int residual_bar_length = 0;
+    //     if (max_count > 0) {
+    //         residual_bar_length = static_cast<int>((static_cast<double>(count) / max_count) * max_bar_width);
+    //     }
+    //     residual_bar_length = std::min(residual_bar_length, max_bar_width);
+    //     std::string residual_bar(residual_bar_length, '*');
+    //     residual_bar.resize(max_bar_width, ' ');
         
-        // Create GMM distribution bar (scale to match residual bar)
-        int gmm_bar_length = 0;
-        if (!gmm_densities.empty() && max_residual_count > 0) {
-            gmm_bar_length = static_cast<int>((gmm_densities[i] / max_residual_count) * max_bar_width);
-            gmm_bar_length = std::min(gmm_bar_length, max_bar_width);
-        }
-        std::string gmm_bar(gmm_bar_length, '+');
-        gmm_bar.resize(max_bar_width, ' ');
+    //     // Create GMM distribution bar (scale to match residual bar)
+    //     int gmm_bar_length = 0;
+    //     if (!gmm_densities.empty() && max_residual_count > 0) {
+    //         gmm_bar_length = static_cast<int>((gmm_densities[i] / max_residual_count) * max_bar_width);
+    //         gmm_bar_length = std::min(gmm_bar_length, max_bar_width);
+    //     }
+    //     std::string gmm_bar(gmm_bar_length, '+');
+    //     gmm_bar.resize(max_bar_width, ' ');
         
-        // Create weight bar (scale to 0-max_bar_width range)
-        int weight_bar_length = static_cast<int>(avg_weight * max_bar_width);
-        weight_bar_length = std::min(weight_bar_length, max_bar_width);
-        std::string weight_bar(weight_bar_length, '=');
+    //     // Create weight bar (scale to 0-max_bar_width range)
+    //     int weight_bar_length = static_cast<int>(avg_weight * max_bar_width);
+    //     weight_bar_length = std::min(weight_bar_length, max_bar_width);
+    //     std::string weight_bar(weight_bar_length, '=');
         
-        // Check if scale factor falls in this bin
-        std::string scale_indicator = "";
-        if (m_last_scale_factor >= bin_start && m_last_scale_factor < bin_end) {
-            scale_indicator = " <-- SCALE FACTOR";
-        }
+    //     // Check if scale factor falls in this bin
+    //     std::string scale_indicator = "";
+    //     if (m_last_scale_factor >= bin_start && m_last_scale_factor < bin_end) {
+    //         scale_indicator = " <-- SCALE FACTOR";
+    //     }
         
-        SPDLOG_INFO("  [{:7.4f},{:7.4f}): {:3d}({:4.1f}%) |{}|{}|{}| w={:.3f}{}", 
-                   bin_start, bin_end, count, percentage, 
-                   residual_bar, gmm_bar, weight_bar, avg_weight, scale_indicator);
-    }
+    //     SPDLOG_INFO("  [{:7.4f},{:7.4f}): {:3d}({:4.1f}%) |{}|{}|{}| w={:.3f}{}", 
+    //                bin_start, bin_end, count, percentage, 
+    //                residual_bar, gmm_bar, weight_bar, avg_weight, scale_indicator);
+    // }
     
 }
 
