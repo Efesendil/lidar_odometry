@@ -1,6 +1,6 @@
 /**
  * @file      AdaptiveMEstimator.cpp
- * @brief     Implementation of MAD-based adaptive M-estimator.
+ * @brief     Implementation of Adaptive M-estimator.
  * @author    Seungwon Choi
  * @date      2025-09-25
  * @copyright Copyright (c) 2025 Seungwon Choi. All rights reserved.
@@ -30,9 +30,6 @@ namespace optimization {
 AdaptiveMEstimator::AdaptiveMEstimator(
     bool use_adaptive_m_estimator,
     const std::string& loss_type,
-    const std::string& scale_method,
-    double fixed_scale_factor,
-    double mad_multiplier,
     double min_scale_factor,
     double max_scale_factor,
     int num_alpha_segments,
@@ -40,16 +37,13 @@ AdaptiveMEstimator::AdaptiveMEstimator(
     int gmm_components,
     int gmm_sample_size,
     const std::string& pko_kernel_type)
-    : m_last_scale_factor(fixed_scale_factor)
+    : m_last_scale_factor(min_scale_factor)
     , m_alpha_star_ref(max_scale_factor)
     , m_max_density(0.0) {
     
-    // Initialize configuration with provided values
+    // Initialize configuration with provided values (PKO only)
     m_config.use_adaptive_m_estimator = use_adaptive_m_estimator;
     m_config.loss_type = loss_type;
-    m_config.scale_method = scale_method;
-    m_config.fixed_scale_factor = fixed_scale_factor;
-    m_config.mad_multiplier = mad_multiplier;
     m_config.min_scale_factor = min_scale_factor;
     m_config.max_scale_factor = max_scale_factor;
     m_config.num_alpha_segments = num_alpha_segments;
@@ -61,12 +55,6 @@ AdaptiveMEstimator::AdaptiveMEstimator(
     // PKO will be initialized lazily when needed
 }
 
-void AdaptiveMEstimator::set_config(const AdaptiveMEstimatorConfig& config) {
-    m_config = config;
-    if (m_config.scale_method == "fixed") {
-        m_last_scale_factor = m_config.fixed_scale_factor;
-    }
-}
 
 const AdaptiveMEstimatorConfig& AdaptiveMEstimator::get_config() const {
     return m_config;
@@ -82,20 +70,10 @@ double AdaptiveMEstimator::calculate_scale_factor(
 
     double scale_factor = 1.0;
 
-    if (m_config.scale_method == "MAD") {
-        scale_factor = calculate_mad_scale_factor(residuals);
-    } else if (m_config.scale_method == "fixed") {
-        scale_factor = m_config.fixed_scale_factor;
-    } else if (m_config.scale_method == "PKO") {
-        scale_factor = calculate_pko_scale_factor(residuals);
-    } else {
-        SPDLOG_WARN("Unknown scale method: {}, using MAD", m_config.scale_method);
-        scale_factor = calculate_mad_scale_factor(residuals);
-    }
+    scale_factor = calculate_pko_scale_factor(residuals);
 
     // Clamp scale factor to reasonable range
-    scale_factor = std::max(m_config.min_scale_factor, 
-                           std::min(scale_factor, m_config.max_scale_factor));
+    // scale_factor = std::max(m_config.min_scale_factor, ::min(scale_factor, m_config.max_scale_factor));
 
     // Update last computed scale factor
     m_last_scale_factor = scale_factor;
@@ -108,85 +86,18 @@ double AdaptiveMEstimator::calculate_weight(double residual, double scale_factor
         return 1.0;
     }
     
-    // Normalize residual
-    double normalized_residual = std::abs(residual) / scale_factor;
-    
-    // Apply appropriate loss function
-    if (m_config.loss_type == "cauchy") {
-        return cauchy_weight(normalized_residual);
-    } else if (m_config.loss_type == "huber") {
-        return huber_weight(normalized_residual);
-    } else {
-        return cauchy_weight(normalized_residual);
-    }
+    // Use PKO kernel weight directly
+    return pko_kernel_weight(residual, scale_factor);
 }
 
 
 
 void AdaptiveMEstimator::reset() {
-    m_last_scale_factor = m_config.fixed_scale_factor;
+    m_last_scale_factor = m_config.min_scale_factor;
 }
 
-double AdaptiveMEstimator::calculate_mad_scale_factor(const std::vector<double>& residuals) const {
-    double mad = calculate_mad(residuals);
-    return mad * m_config.mad_multiplier;
-}
 
-double AdaptiveMEstimator::calculate_median(std::vector<double>& data) const {
-    if (data.empty()) {
-        return 0.0;
-    }
-    
-    size_t n = data.size();
-    std::nth_element(data.begin(), data.begin() + n/2, data.end());
-    
-    if (n % 2 == 1) {
-        return data[n/2];
-    } else {
-        double median1 = data[n/2];
-        std::nth_element(data.begin(), data.begin() + n/2 - 1, data.end());
-        double median2 = data[n/2 - 1];
-        return (median1 + median2) / 2.0;
-    }
-}
-
-double AdaptiveMEstimator::calculate_mad(const std::vector<double>& data) const {
-    if (data.empty()) {
-        return 0.0;
-    }
-    
-    // Step 1: Calculate median of original data
-    std::vector<double> data_copy = data;
-    double median = calculate_median(data_copy);
-    
-    // Step 2: Calculate absolute deviations from median
-    std::vector<double> abs_deviations;
-    abs_deviations.reserve(data.size());
-    
-    for (double value : data) {
-        abs_deviations.push_back(std::abs(value - median));
-    }
-    
-    // Step 3: Calculate median of absolute deviations
-    return calculate_median(abs_deviations);
-}
-
-double AdaptiveMEstimator::cauchy_weight(double normalized_residual) const {
-    // Cauchy loss: w(r) = 1 / (1 + r^2)
-    double r2 = normalized_residual * normalized_residual;
-    return 1.0 / (1.0 + r2);
-}
-
-double AdaptiveMEstimator::huber_weight(double normalized_residual) const {
-    // Huber loss: w(r) = 1 if |r| <= 1, w(r) = 1/|r| if |r| > 1
-    if (normalized_residual <= 1.0) {
-        return 1.0;
-    } else {
-        return 1.0 / normalized_residual;
-    }
-}
-
-// PKO robust loss functions (백업과 동일)
+// PKO robust loss functions
 double AdaptiveMEstimator::tukey_weight(double residual, double delta) const {
     double abs_residual = std::abs(residual);
     if (abs_residual < delta) {
@@ -259,34 +170,19 @@ double AdaptiveMEstimator::calculate_information_matrix_diagonal(const std::vect
     // If adaptive M-estimator is disabled, return identity information matrix
     if (!m_config.use_adaptive_m_estimator) {
         std::fill(information_diagonal.begin(), information_diagonal.end(), 1.0);
-        return m_config.fixed_scale_factor;
-    }
-    
-    // PKO 방법에서는 커널이 직접 가중치를 결정하므로 정보 매트릭스 계산 불필요
-    if (m_config.scale_method == "PKO") {
-        std::fill(information_diagonal.begin(), information_diagonal.end(), 1.0);
         return m_last_scale_factor;
     }
     
-    // Use the last calculated scale factor to avoid redundant computation
-    double scale_factor = m_last_scale_factor;
-    
-    // Calculate information matrix diagonal elements
-    // Information = weight^2 (for some formulations) or weight (for others)
-    // Here we use weight^2 for better numerical properties
-    for (size_t i = 0; i < residuals.size(); ++i) {
-        double weight = calculate_weight(residuals[i], scale_factor);
-        information_diagonal[i] = weight * weight;  // Information = weight^2
-    }
-    
-    return scale_factor;
+    // PKO 방법에서는 커널이 직접 가중치를 결정하므로 정보 매트릭스 계산 불필요
+    std::fill(information_diagonal.begin(), information_diagonal.end(), 1.0);
+    return m_last_scale_factor;
 }
 
 double AdaptiveMEstimator::calculate_information_matrix(const std::vector<double>& residuals, 
                                                        std::vector<std::vector<double>>& information_matrix) {
     if (residuals.empty()) {
         information_matrix.clear();
-        return m_config.fixed_scale_factor;
+        return m_config.min_scale_factor;
     }
     
     size_t n = residuals.size();

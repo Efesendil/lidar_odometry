@@ -82,7 +82,7 @@ bool PangolinViewer::initialize(int width, int height) {
     m_render_thread = std::thread([this, width, height]() {
         try {
             // Create OpenGL window with Pangolin (must be done in render thread)
-            pangolin::CreateWindowAndBind("LiDAR Odometry Viewer", width, height);
+            pangolin::CreateWindowAndBind("LiDAR Odometry with Probabilistic Kernel Optimization (PKO)", width, height);
             glEnable(GL_DEPTH_TEST);
             glEnable(GL_BLEND);
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -117,7 +117,7 @@ bool PangolinViewer::initialize(int width, int height) {
         
         // Cleanup
         try {
-            pangolin::DestroyWindow("LiDAR Odometry Viewer");
+            pangolin::DestroyWindow("LiDAR Odometry with Probabilistic Kernel Optimization (PKO)");
         } catch (const std::exception& e) {
             spdlog::warn("[PangolinViewer] Exception during window cleanup: {}", e.what());
         }

@@ -36,21 +36,21 @@ namespace optimization {
  * residual = n_q^T * (R * p + t - q)
  * 
  * where:
- * - p: point in source frame (local coordinates)
- * - q: point on target plane (world coordinates) 
- * - n_q: normal vector of target plane (world coordinates)
- * - R, t: SE3 transformation parameters (source to world)
+ * - p: point in source frame (current local frame)
+ * - q: point on target plane (current local frame, transformed from map) 
+ * - n_q: normal vector of target plane (current local frame)
+ * - R, t: SE3 correction parameters within current local frame
  * 
- * Parameters: SE3 pose in tangent space [6]
+ * Parameters: SE3 pose correction in tangent space [6]
  * Residual dimension: [1]
  */
 class PointToPlaneFactor : public ceres::SizedCostFunction<1, 6> {
 public:
     /**
      * @brief Constructor
-     * @param source_point 3D point in source frame (local coordinates)
-     * @param target_point 3D point on target plane (world coordinates)
-     * @param plane_normal Normal vector of target plane (world coordinates, normalized)
+     * @param source_point 3D point in source frame (current local frame)
+     * @param target_point 3D point on target plane (current local frame)
+     * @param plane_normal Normal vector of target plane (current local frame, normalized)
      * @param information_weight Information weight (sqrt of information matrix)
      */
     PointToPlaneFactor(const Eigen::Vector3f& source_point,

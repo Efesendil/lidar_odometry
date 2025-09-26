@@ -15,6 +15,12 @@ The system incorporates **Probabilistic Kernel Optimization (PKO)** for robust s
 - 🔧 Ceres Solver-based optimization
 - 📈 Adaptive M-estimator for robust estimation (PKO)
 
+## Demo
+
+[![LiDAR Odometry Demo](https://img.youtube.com/vi/FANz9mhIAQQ/0.jpg)](https://www.youtube.com/watch?v=FANz9mhIAQQ)
+
+*Click to watch the demo video showing real-time LiDAR odometry on KITTI dataset*
+
 ## Quick Start
 
 ### 1. Build Options
@@ -25,21 +31,6 @@ git clone https://github.com/93won/lidar_odometry
 cd lidar_odometry
 chmod +x build.sh
 ./build.sh
-```
-
-#### Docker Build
-```bash
-git clone https://github.com/93won/lidar_odometry
-cd lidar_odometry
-chmod +x docker.sh
-./docker.sh
-
-# Run with Docker
-docker run -it --rm \
-    -v /tmp/.X11-unix:/tmp/.X11-unix \
-    -e DISPLAY=$DISPLAY \
-    -v $(pwd):/workspace \
-    lidar_odometry:latest
 ```
 
 ### 2. Download Sample Data

@@ -27,11 +27,8 @@ namespace optimization {
 struct AdaptiveMEstimatorConfig {
     bool use_adaptive_m_estimator = true;     ///< Enable adaptive M-estimator
     std::string loss_type = "cauchy";          ///< Loss function type: "cauchy", "huber"
-    std::string scale_method = "MAD";          ///< Scale calculation method: "MAD", "fixed", "std", "PKO"
+    std::string scale_method = "PKO";         
     double fixed_scale_factor = 1.0;          ///< Fixed scale factor when scale_method is "fixed"
-    double mad_multiplier = 1.4826;           ///< Base MAD to standard deviation conversion factor
-    double cauchy_multiplier = 2.3849;        ///< Cauchy loss multiplier
-    double huber_multiplier = 1.345;          ///< Huber loss multiplier
     double min_scale_factor = 0.01;           ///< Minimum allowed scale factor (also PKO alpha lower bound)
     double max_scale_factor = 10.0;           ///< Maximum allowed scale factor (also PKO alpha upper bound)
     
@@ -43,40 +40,24 @@ struct AdaptiveMEstimatorConfig {
     std::string pko_kernel_type = "cauchy";   ///< PKO kernel type: "huber", "cauchy", "tukey", "welsch", "gemanMcClure", "pseudoHuber"
 };
 
-/**
- * @brief MAD-based adaptive M-estimator for robust optimization
- * 
- * This class implements adaptive M-estimation using Median Absolute Deviation (MAD)
- * to automatically determine the scale parameter for robust loss functions.
- * 
- * The scale factor is computed as:
- * δ = MAD(residuals) * mad_multiplier
- * 
- * where MAD = median(|residuals - median(residuals)|)
- */
+
 class AdaptiveMEstimator {
 public:
     /**
-     * @brief Constructor with all configuration parameters
+     * @brief Constructor with PKO configuration parameters
      * @param use_adaptive_m_estimator Enable adaptive M-estimator
      * @param loss_type Loss function type ("cauchy", "huber")
-     * @param scale_method Scale calculation method ("PKO", "MAD", "fixed", "std")
-     * @param fixed_scale_factor Fixed scale factor value
-     * @param mad_multiplier MAD multiplier constant
      * @param min_scale_factor Minimum allowed scale factor
      * @param max_scale_factor Maximum allowed scale factor
      * @param num_alpha_segments Number of alpha candidates for PKO
      * @param truncated_threshold Truncation threshold for PKO integration
      * @param gmm_components Number of GMM components
      * @param gmm_sample_size Sample size for GMM fitting
-     * @param pko_kernel_type PKO kernel type ("cauchy", "huber", "tukey", etc.)
+     * @param pko_kernel_type PKO kernel type
      */
     explicit AdaptiveMEstimator(
         bool use_adaptive_m_estimator = true,
         const std::string& loss_type = "cauchy",
-        const std::string& scale_method = "PKO",
-        double fixed_scale_factor = 1.0,
-        double mad_multiplier = 1.4826,
         double min_scale_factor = 0.0001,
         double max_scale_factor = 0.1,
         int num_alpha_segments = 1000,
@@ -104,7 +85,7 @@ public:
     const AdaptiveMEstimatorConfig& get_config() const;
     
     /**
-     * @brief Calculate scale factor from residuals using MAD
+     * @brief Calculate scale factor from residuals
      * @param residuals Vector of residuals
      * @return Calculated scale factor (delta)
      */
@@ -173,41 +154,6 @@ private:
      * @brief Initialize PKO (Probabilistic Kernel Optimization)
      */
     void initialize_pko();
-    
-    /**
-     * @brief Calculate median of a vector
-     * @param data Input data (will be modified for sorting)
-     * @return Median value
-     */
-    double calculate_median(std::vector<double>& data) const;
-    
-    /**
-     * @brief Calculate Median Absolute Deviation (MAD)
-     * @param data Input data
-     * @return MAD value
-     */
-    double calculate_mad(const std::vector<double>& data) const;
-    
-    /**
-     * @brief Calculate MAD-based scale factor
-     * @param residuals Input residuals
-     * @return Scale factor
-     */
-    double calculate_mad_scale_factor(const std::vector<double>& residuals) const;
-    
-    /**
-     * @brief Cauchy loss weight function
-     * @param residual Normalized residual (residual / delta)
-     * @return Weight value
-     */
-    double cauchy_weight(double normalized_residual) const;
-    
-    /**
-     * @brief Huber loss weight function
-     * @param residual Normalized residual (residual / delta)
-     * @return Weight value
-     */
-    double huber_weight(double normalized_residual) const;
     
     // PKO robust loss functions (used as kernels)
     /**

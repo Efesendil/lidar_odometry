@@ -41,12 +41,13 @@ struct SystemConfig {
     
     // ===== Odometry =====
     size_t max_iterations = 20;                     ///< Maximum optimization iterations
-    double convergence_threshold = 1e-6;            ///< Convergence threshold for optimization
+    double translation_threshold = 0.001;           ///< Translation convergence threshold (meters)
+    double rotation_threshold = 0.001;              ///< Rotation convergence threshold (radians)
     float max_correspondence_distance = 1.0f;       ///< Maximum distance for correspondences
     float initial_guess_rotation = 0.1f;            ///< Initial rotation guess limit (rad)
     
     // ===== Estimator =====
-    float map_voxel_size = 0.1f;                    ///< Local map voxel size
+    float map_voxel_size = 0.2f;                    ///< Local map voxel size
     double keyframe_distance_threshold = 1.0;       ///< Distance threshold for keyframe creation
     double keyframe_rotation_threshold = 0.2;       ///< Rotation threshold for keyframe creation
     size_t min_correspondence_points = 10;           ///< Minimum correspondence points

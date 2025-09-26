@@ -48,7 +48,8 @@ using namespace lidar_odometry::util;
 struct EstimatorConfig {
     // ICP parameters (from YAML odometry section)
     size_t max_icp_iterations = 50;
-    double icp_convergence_threshold = 0.001;  // Used for both translation and rotation tolerance
+    double icp_translation_threshold = 0.001;  // Translation convergence threshold (meters)
+    double icp_rotation_threshold = 0.001;     // Rotation convergence threshold (radians)
     double correspondence_distance = 1.0;
     double transformation_epsilon = 1e-6;
     double euclidean_fitness_epsilon = 1e-6;
@@ -70,7 +71,8 @@ struct EstimatorConfig {
     std::string pko_kernel_type = "cauchy";
     
     // Mapping parameters
-    double voxel_size = 0.4;  // Voxel size for all downsampling operations
+    double voxel_size = 0.4;  // Voxel size for input cloud downsampling
+    double map_voxel_size = 0.2;  // Voxel size for map downsampling
     double max_range = 100.0;  // Max range for crop box filter
     size_t max_map_frames = 50;
     double keyframe_distance_threshold = 1.0;

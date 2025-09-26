@@ -1,0 +1,7 @@
+build/
+thirdparty/*/build/
+*.o
+*.so
+*.a
+.git/
+.vscode/

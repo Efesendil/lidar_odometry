@@ -36,13 +36,10 @@ Estimator::Estimator(const EstimatorConfig& config)
 {
 
     
-    // Create AdaptiveMEstimator with direct parameter passing (no intermediate config struct)
+    // Create AdaptiveMEstimator with PKO configuration only
     m_adaptive_estimator = std::make_shared<optimization::AdaptiveMEstimator>(
         config.use_adaptive_m_estimator,
         config.loss_type,
-        config.scale_method,
-        config.fixed_scale_factor,
-        config.mad_multiplier,
         config.min_scale_factor,
         config.max_scale_factor,
         config.num_alpha_segments,
@@ -55,8 +52,8 @@ Estimator::Estimator(const EstimatorConfig& config)
     // Initialize modern ICP with Ceres and AdaptiveMEstimator using YAML configuration
     ICPConfig icp_config;
     icp_config.max_iterations = config.max_icp_iterations;
-    icp_config.translation_tolerance = config.icp_convergence_threshold;  // From YAML odometry.convergence_threshold
-    icp_config.rotation_tolerance = config.icp_convergence_threshold;     // From YAML odometry.convergence_threshold  
+    icp_config.translation_tolerance = config.icp_translation_threshold;  // From YAML odometry.translation_threshold
+    icp_config.rotation_tolerance = config.icp_rotation_threshold;        // From YAML odometry.rotation_threshold  
     icp_config.max_correspondence_distance = config.correspondence_distance;
     icp_config.outlier_rejection_ratio = 0.9;
     icp_config.use_robust_loss = true;
@@ -247,7 +244,7 @@ SE3f Estimator::estimate_motion_icp(PointCloudConstPtr current_features,
     
     // Perform ICP alignment
     Sophus::SE3f result_pose;
-    bool success = m_icp->align(current_xyz, previous_xyz, initial_pose_se3f, result_pose);
+    m_icp->align(current_xyz, previous_xyz, initial_pose_se3f, result_pose);
     
     // Get ICP statistics
     const auto& stats = m_icp->get_statistics();
@@ -304,9 +301,9 @@ void Estimator::create_keyframe(std::shared_ptr<database::LidarFrame> frame)
         return;
     }
 
-    // Apply voxel grid downsampling with half the voxel size for map points
+    // Apply voxel grid downsampling with configurable map voxel size
     pcl::VoxelGrid<PointType> map_voxel_filter;
-    float map_voxel_size = m_config.voxel_size * 0.5f;  // Use half the voxel size for map points
+    float map_voxel_size = static_cast<float>(m_config.map_voxel_size);  // Use configured map voxel size
     map_voxel_filter.setLeafSize(map_voxel_size, map_voxel_size, map_voxel_size);
     map_voxel_filter.setInputCloud(m_feature_map);
 

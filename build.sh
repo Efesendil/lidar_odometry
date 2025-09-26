@@ -17,22 +17,28 @@ echo "Using $NPROC cores for compilation (half of available)"
 echo ""
 echo "Step 0: Installing system dependencies..."
 echo "========================================"
-sudo apt update
-sudo apt install -y \
-    cmake \
-    build-essential \
-    libeigen3-dev \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev \
-    libglew-dev \
-    libgflags-dev \
-    libgoogle-glog-dev \
-    libatlas-base-dev \
-    libsuitesparse-dev \
-    libpcl-dev \
-    libyaml-cpp-dev
 
-echo "System dependencies installed successfully!"
+# Check if running in Docker container
+if [ -n "$DOCKER_CONTAINER" ]; then
+    echo "Running in Docker container - skipping apt updates (dependencies pre-installed)"
+else
+    sudo apt update
+    sudo apt install -y \
+        cmake \
+        build-essential \
+        libeigen3-dev \
+        libgl1-mesa-dev \
+        libglu1-mesa-dev \
+        libglew-dev \
+        libgflags-dev \
+        libgoogle-glog-dev \
+        libatlas-base-dev \
+        libsuitesparse-dev \
+        libpcl-dev \
+        libyaml-cpp-dev
+
+    echo "System dependencies installed successfully!"
+fi
 
 # Build third-party dependencies
 echo ""

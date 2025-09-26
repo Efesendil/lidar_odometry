@@ -104,6 +104,9 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         if (config_map.find("point_cloud.voxel_size") != config_map.end()) {
             m_config.voxel_size = std::stof(config_map["point_cloud.voxel_size"]);
         }
+        if (config_map.find("point_cloud.map_voxel_size") != config_map.end()) {
+            m_config.map_voxel_size = std::stof(config_map["point_cloud.map_voxel_size"]);
+        }
         if (config_map.find("point_cloud.max_range") != config_map.end()) {
             m_config.max_range = std::stof(config_map["point_cloud.max_range"]);
         }
@@ -135,8 +138,11 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         if (config_map.find("odometry.max_iterations") != config_map.end()) {
             m_config.max_iterations = std::stoull(config_map["odometry.max_iterations"]);
         }
-        if (config_map.find("odometry.convergence_threshold") != config_map.end()) {
-            m_config.convergence_threshold = std::stod(config_map["odometry.convergence_threshold"]);
+        if (config_map.find("odometry.translation_threshold") != config_map.end()) {
+            m_config.translation_threshold = std::stod(config_map["odometry.translation_threshold"]);
+        }
+        if (config_map.find("odometry.rotation_threshold") != config_map.end()) {
+            m_config.rotation_threshold = std::stod(config_map["odometry.rotation_threshold"]);
         }
         if (config_map.find("odometry.max_correspondence_distance") != config_map.end()) {
             m_config.max_correspondence_distance = std::stof(config_map["odometry.max_correspondence_distance"]);
@@ -145,21 +151,9 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
             m_config.initial_guess_rotation = std::stof(config_map["odometry.initial_guess_rotation"]);
         }
         
-        // Robust estimation
+        // Robust estimation - PKO only
         if (config_map.find("robust_estimation.use_adaptive_m_estimator") != config_map.end()) {
             m_config.use_adaptive_m_estimator = config_map["robust_estimation.use_adaptive_m_estimator"] == "true";
-        }
-        if (config_map.find("robust_estimation.loss_type") != config_map.end()) {
-            m_config.loss_type = config_map["robust_estimation.loss_type"];
-        }
-        if (config_map.find("robust_estimation.scale_method") != config_map.end()) {
-            m_config.scale_method = config_map["robust_estimation.scale_method"];
-        }
-        if (config_map.find("robust_estimation.fixed_scale_factor") != config_map.end()) {
-            m_config.fixed_scale_factor = std::stod(config_map["robust_estimation.fixed_scale_factor"]);
-        }
-        if (config_map.find("robust_estimation.mad_multiplier") != config_map.end()) {
-            m_config.mad_multiplier = std::stod(config_map["robust_estimation.mad_multiplier"]);
         }
         if (config_map.find("robust_estimation.min_scale_factor") != config_map.end()) {
             m_config.min_scale_factor = std::stod(config_map["robust_estimation.min_scale_factor"]);

@@ -143,7 +143,7 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
                 if (context.auto_play) {
                     double sleep_time_ms = 100 - total_time_ms;
                     if (sleep_time_ms > 0) {
-                        // std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
+                        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
                     }
                 }
             }
@@ -430,9 +430,11 @@ void KittiPlayer::initialize_estimator(const util::SystemConfig& config) {
     
     // Map system config values to estimator config
     estimator_config.max_icp_iterations = config.max_iterations;
-    estimator_config.icp_convergence_threshold = config.convergence_threshold;
+    estimator_config.icp_translation_threshold = config.translation_threshold;
+    estimator_config.icp_rotation_threshold = config.rotation_threshold;
     estimator_config.correspondence_distance = config.max_correspondence_distance;
     estimator_config.voxel_size = config.voxel_size;
+    estimator_config.map_voxel_size = config.map_voxel_size;
     estimator_config.max_range = config.max_range;
     estimator_config.keyframe_distance_threshold = config.keyframe_distance_threshold;
     estimator_config.keyframe_rotation_threshold = config.keyframe_rotation_threshold;

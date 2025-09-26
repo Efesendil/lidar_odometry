@@ -48,22 +48,22 @@ bool PointToPlaneFactor::Evaluate(double const* const* parameters,
         Eigen::Map<const Eigen::Vector6d> se3_tangent(parameters[0]);
         
         // Convert tangent space to SE3 using Sophus exp
-        Sophus::SE3d T_sw = Sophus::SE3d::exp(se3_tangent); // source to world transform
+        Sophus::SE3d T_correction = Sophus::SE3d::exp(se3_tangent); // local frame correction transform
         
         // Extract rotation and translation
-        Eigen::Matrix3d R = T_sw.rotationMatrix();
-        Eigen::Vector3d t = T_sw.translation();
+        Eigen::Matrix3d R = T_correction.rotationMatrix();
+        Eigen::Vector3d t = T_correction.translation();
         
         // Convert float points to double for computation
-        Eigen::Vector3d p = m_source_point.cast<double>();  // source point (local)
-        Eigen::Vector3d q = m_target_point.cast<double>();  // target point (world)
-        Eigen::Vector3d n = m_plane_normal.cast<double>();  // plane normal (world)
+        Eigen::Vector3d p = m_source_point.cast<double>();  // source point (current local frame)
+        Eigen::Vector3d q = m_target_point.cast<double>();  // target point (current local frame)
+        Eigen::Vector3d n = m_plane_normal.cast<double>();  // plane normal (current local frame)
         
-        // Transform source point to world coordinates: p_world = R * p + t
-        Eigen::Vector3d p_world = R * p + t;
+        // Apply local correction to source point: p_corrected = R * p + t
+        Eigen::Vector3d p_corrected = R * p + t;
         
-        // Compute point-to-plane distance: residual = n^T * (p_world - q)
-        double raw_residual = n.dot(p_world - q);
+        // Compute point-to-plane distance: residual = n^T * (p_corrected - q)
+        double raw_residual = n.dot(p_corrected - q);
         
         // Apply information weighting and robust weighting
         residuals[0] = m_information_weight * m_robust_weight * raw_residual;
@@ -111,22 +111,22 @@ double PointToPlaneFactor::compute_raw_residual(double const* const* parameters)
         Eigen::Map<const Eigen::Vector6d> se3_tangent(parameters[0]);
         
         // Convert tangent space to SE3
-        Sophus::SE3d T_sw = Sophus::SE3d::exp(se3_tangent);
+        Sophus::SE3d T_correction = Sophus::SE3d::exp(se3_tangent);
         
         // Extract rotation and translation
-        Eigen::Matrix3d R = T_sw.rotationMatrix();
-        Eigen::Vector3d t = T_sw.translation();
+        Eigen::Matrix3d R = T_correction.rotationMatrix();
+        Eigen::Vector3d t = T_correction.translation();
         
         // Convert float points to double for computation
         Eigen::Vector3d p = m_source_point.cast<double>();
         Eigen::Vector3d q = m_target_point.cast<double>();
         Eigen::Vector3d n = m_plane_normal.cast<double>();
         
-        // Transform source point to world coordinates
-        Eigen::Vector3d p_world = R * p + t;
+        // Apply local correction to source point
+        Eigen::Vector3d p_corrected = R * p + t;
         
         // Compute raw point-to-plane distance (without weighting)
-        double raw_residual = n.dot(p_world - q);
+        double raw_residual = n.dot(p_corrected - q);
         
         return std::abs(raw_residual); // Return absolute value for robust estimation
         
