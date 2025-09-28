@@ -140,7 +140,13 @@ public:
      * @return Const pointer to local map
      */
     PointCloudConstPtr get_local_map() const;
-    
+
+    /**
+    * @brief Get current pose
+    * @return Current pose as SE3f
+    */
+    const SE3f& get_current_pose() const;
+
     /**
      * @brief Get ICP statistics
      * @param avg_iterations Average iterations per ICP call
