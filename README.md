@@ -8,6 +8,9 @@ The system incorporates **Probabilistic Kernel Optimization (PKO)** for robust s
 > 
 > **Paper**: [https://ieeexplore.ieee.org/document/10857458](https://ieeexplore.ieee.org/document/10857458)
 
+ROS Wrapper: https://github.com/93won/lidar_odometry_ros_wrapper
+
+
 ## Features
 
 - ⚡ Real-time LiDAR odometry processing
