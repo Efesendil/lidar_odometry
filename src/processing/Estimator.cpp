@@ -408,5 +408,9 @@ void Estimator::get_icp_statistics(double& avg_iterations, double& avg_time_ms) 
     }
 }
 
+const SE3f& Estimator::get_current_pose() const {
+    return m_T_wl_current;
+}
+
 } // namespace processing
 } // namespace lidar_odometry
