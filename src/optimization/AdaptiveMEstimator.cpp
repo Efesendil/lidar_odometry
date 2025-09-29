@@ -857,7 +857,7 @@ void AdaptiveMEstimator::log_residual_histogram(const std::vector<double>& resid
             }
         }
     }
-    
+    /*
     // Log histogram with three distributions
 
     SPDLOG_INFO("                                | [Residual Distribution] | [   P_data(inlier|r)  ] |         [P_model(inlier|r,c)]        |");
@@ -912,6 +912,7 @@ void AdaptiveMEstimator::log_residual_histogram(const std::vector<double>& resid
                    bin_start, bin_end, count, percentage, 
                    residual_bar, gmm_bar, weight_bar, avg_weight, scale_indicator);
     }
+    */
     
 }
 
