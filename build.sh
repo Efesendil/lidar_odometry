@@ -83,6 +83,7 @@ cmake .. \
     -DBUILD_PYPANGOLIN=OFF \
     -DBUILD_PANGOLIN_PYTHON=OFF
 make -j$NPROC
+
 cd ../../..
 
 # Sophus is header-only, no need to build

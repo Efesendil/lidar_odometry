@@ -72,6 +72,7 @@ include_directories(
     ${THIRDPARTY_DIR}/spdlog/include
     ${THIRDPARTY_DIR}/ceres-solver/include
     ${CMAKE_BINARY_DIR}/../thirdparty/ceres-solver/include
+    ${THIRDPARTY_DIR}/nanoflann/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../Backup/3rdParty/g2o
     ${CMAKE_CURRENT_SOURCE_DIR}/../Backup/src
 )
@@ -100,6 +101,7 @@ set(LIDAR_ODOMETRY_SOURCES
     # Utility module
     util/Config.cpp
     util/MathUtils.cpp
+    util/PointCloudUtils.cpp
     
     # Main application
     ../app/kitti_lidar_odometry.cpp
