@@ -63,10 +63,8 @@ Estimator::Estimator(const EstimatorConfig& config)
     m_icp = std::make_shared<IterativeClosestPoint>(icp_config, m_adaptive_estimator);
     
     // Initialize voxel filter for downsampling
-    m_voxel_filter = std::make_unique<pcl::VoxelGrid<PointType>>();
-    m_voxel_filter->setLeafSize(m_config.voxel_size, 
-                               m_config.voxel_size, 
-                               m_config.voxel_size);
+    m_voxel_filter = std::make_unique<util::VoxelGrid>();
+    m_voxel_filter->setLeafSize(static_cast<float>(m_config.voxel_size));
     
     // Initialize feature extractor
     FeatureExtractorConfig feature_config;
@@ -106,7 +104,7 @@ bool Estimator::process_frame(std::shared_ptr<database::LidarFrame> current_fram
     // Store pre-ICP cloud in world coordinates for visualization
     PointCloudPtr pre_icp_cloud_world(new PointCloud());
     Eigen::Matrix4f T_wl_initial = m_T_wl_current.matrix();
-    pcl::transformPointCloud(*feature_cloud, *pre_icp_cloud_world, T_wl_initial);
+    util::transform_point_cloud(feature_cloud, pre_icp_cloud_world, T_wl_initial);
     
     // Step 3: Transform previous features to current frame estimate
     PointCloudPtr feature_map_local(new PointCloud());
@@ -115,7 +113,7 @@ bool Estimator::process_frame(std::shared_ptr<database::LidarFrame> current_fram
     if (!m_feature_map->empty()) {
         // Transform from world to current frame coordinate
         Eigen::Matrix4f T_lw = m_T_wl_current.inverse().matrix();
-        pcl::transformPointCloud(*m_feature_map, *feature_map_local, T_lw);
+        util::transform_point_cloud(m_feature_map, feature_map_local, T_lw);
     }
     
     // Step 4: ICP between current features and previous features
@@ -136,7 +134,7 @@ bool Estimator::process_frame(std::shared_ptr<database::LidarFrame> current_fram
     // Store post-ICP cloud in world coordinates for visualization
     PointCloudPtr post_icp_cloud_world(new PointCloud());
     Eigen::Matrix4f T_wl_final = icp_pose_estimate.matrix();
-    pcl::transformPointCloud(*feature_cloud, *post_icp_cloud_world, T_wl_final);
+    util::transform_point_cloud(feature_cloud, post_icp_cloud_world, T_wl_final);
 
     current_frame->set_feature_cloud_global(post_icp_cloud_world); // Cache world coordinate features
     
@@ -205,7 +203,7 @@ void Estimator::initialize_first_frame(std::shared_ptr<database::LidarFrame> fra
     // Transform features to world coordinates using current pose
     PointCloudPtr feature_cloud_world(new PointCloud());
     Eigen::Matrix4f T_wl = m_T_wl_current.matrix();
-    pcl::transformPointCloud(*feature_cloud, *feature_cloud_world, T_wl);
+    util::transform_point_cloud(feature_cloud, feature_cloud_world, T_wl);
     
     // Set global feature cloud in frame
     frame->set_feature_cloud_global(feature_cloud_world);
@@ -227,16 +225,13 @@ SE3f Estimator::estimate_motion_icp(PointCloudConstPtr current_features,
         return initial_guess;
     }
     
-    // Convert PointXYZ clouds for our ICP (no conversion needed since we already use PointXYZ)
-    using ICPPointType = pcl::PointXYZ;
-    using ICPPointCloud = pcl::PointCloud<ICPPointType>;
+    // Use our point cloud implementation for ICP
+    auto current_xyz = std::make_shared<util::PointCloud>();
+    auto previous_xyz = std::make_shared<util::PointCloud>();
     
-    ICPPointCloud::Ptr current_xyz(new ICPPointCloud());
-    ICPPointCloud::Ptr previous_xyz(new ICPPointCloud());
-    
-    // Direct copy since both are PointXYZ
-    *current_xyz = *current_features;
-    *previous_xyz = *previous_features;
+    // Copy point clouds
+    util::copy_point_cloud(current_features, current_xyz);
+    util::copy_point_cloud(previous_features, previous_xyz);
     
     // Convert Sophus pose to our ICP pose type
     Eigen::Matrix3f initial_rotation = util::MathUtils::normalize_rotation_matrix(initial_guess.rotationMatrix());
@@ -302,36 +297,37 @@ void Estimator::create_keyframe(std::shared_ptr<database::LidarFrame> frame)
     }
 
     // Apply voxel grid downsampling with configurable map voxel size
-    pcl::VoxelGrid<PointType> map_voxel_filter;
-    float map_voxel_size = static_cast<float>(m_config.map_voxel_size);  // Use configured map voxel size
-    map_voxel_filter.setLeafSize(map_voxel_size, map_voxel_size, map_voxel_size);
+    util::VoxelGrid map_voxel_filter;
+    float map_voxel_size = static_cast<float>(m_config.map_voxel_size);
+    map_voxel_filter.setLeafSize(map_voxel_size);
     map_voxel_filter.setInputCloud(m_feature_map);
 
-    PointCloud::Ptr new_feature_map(new PointCloud());
+    auto new_feature_map = std::make_shared<util::PointCloud>();
     map_voxel_filter.filter(*new_feature_map);
 
     // Apply crop box filter around current pose
-    pcl::CropBox<PointType> crop_box;
+    util::CropBox crop_box;
     crop_box.setInputCloud(new_feature_map);
     
     // Get current pose center
     Eigen::Vector3f current_position = frame->get_pose().translation();
     
     // Set crop box size based on max_range from config
-    float crop_radius = static_cast<float>(m_config.max_range * 1.2);  // max_range * 1.2 from YAML config
-    Eigen::Vector4f min_point(current_position.x() - crop_radius,
-                              current_position.y() - crop_radius,
-                              current_position.z() - crop_radius,
-                              1.0f);
-    Eigen::Vector4f max_point(current_position.x() + crop_radius,
-                              current_position.y() + crop_radius,
-                              current_position.z() + crop_radius,
-                              1.0f);
+    float crop_radius = static_cast<float>(m_config.max_range * 1.2);
+    Point3D min_point(current_position.x() - crop_radius,
+                     current_position.y() - crop_radius,
+                     current_position.z() - crop_radius);
+    Point3D max_point(current_position.x() + crop_radius,
+                     current_position.y() + crop_radius,
+                     current_position.z() + crop_radius);
     
-    crop_box.setMin(min_point);
-    crop_box.setMax(max_point);
+    Eigen::Vector4f min_vec(min_point.x, min_point.y, min_point.z, 1.0f);
+    Eigen::Vector4f max_vec(max_point.x, max_point.y, max_point.z, 1.0f);
     
-    PointCloud::Ptr cropped_feature_map(new PointCloud());
+    crop_box.setMin(min_vec);
+    crop_box.setMax(max_vec);
+    
+    auto cropped_feature_map = std::make_shared<util::PointCloud>();
     crop_box.filter(*cropped_feature_map);
     
     m_feature_map = cropped_feature_map;
@@ -345,9 +341,7 @@ void Estimator::update_config(const EstimatorConfig& config) {
     m_config = config;
     
     // Update voxel filter
-    m_voxel_filter->setLeafSize(m_config.voxel_size, 
-                                m_config.voxel_size, 
-                                m_config.voxel_size);
+    m_voxel_filter->setLeafSize(static_cast<float>(m_config.voxel_size));
 }
 
 const EstimatorConfig& Estimator::get_config() const {

@@ -236,7 +236,7 @@ void PangolinViewer::render_loop() {
             glPointSize(m_point_size);
             glColor3f(0.5f, 0.5f, 0.5f); // Gray
             glBegin(GL_POINTS);
-            for (const auto& point : map_cloud_copy->points) {
+            for (const auto& point : *map_cloud_copy) {
                 glVertex3f(point.x, point.y, point.z);
             }
             glEnd();
@@ -257,7 +257,7 @@ void PangolinViewer::render_loop() {
                 glPointSize(7.0f); // Large mint points
                 glColor3f(0.4f, 0.9f, 0.8f); // Mint color
                 glBegin(GL_POINTS);
-                for (const auto& point : feature_cloud->points) {
+                for (const auto& point : *feature_cloud) {
                     // Transform point to world coordinates
                     Eigen::Vector4f local_point(point.x, point.y, point.z, 1.0f);
                     Eigen::Vector4f world_point = transform_matrix * local_point;
@@ -524,7 +524,7 @@ void PangolinViewer::draw_point_cloud() {
     
     // Draw with angle-based coloring (0-360 degrees: blue to red)
     glBegin(GL_POINTS);
-    for (const auto& point : point_cloud->points) {
+    for (const auto& point : *point_cloud) {
         // Calculate angle in XY plane using local coordinates (0 to 360 degrees)
         float angle = atan2(point.y, point.x); // Returns -π to π
         angle = angle < 0 ? angle + 2.0f * M_PI : angle;      // Convert to 0 to 2π
@@ -568,7 +568,7 @@ void PangolinViewer::draw_point_cloud_with_frame(std::shared_ptr<database::Lidar
     
     // Draw with angle-based coloring (0-360 degrees: blue to red)
     glBegin(GL_POINTS);
-    for (const auto& point : point_cloud->points) {
+    for (const auto& point : *point_cloud) {
         // Calculate angle in XY plane using local coordinates (0 to 360 degrees)
         float angle = atan2(point.y, point.x); // Returns -π to π
         angle = angle < 0 ? angle + 2.0f * M_PI : angle;      // Convert to 0 to 2π
@@ -603,7 +603,7 @@ void PangolinViewer::draw_plane_features() {
     glColor3f(1.0f, 0.5f, 0.0f); // Orange for plane features
     
     glBegin(GL_POINTS);
-    for (const auto& point : feature_cloud->points) {
+    for (const auto& point : *feature_cloud) {
         glVertex3f(point.x, point.y, point.z);
     }
     glEnd();
@@ -731,8 +731,8 @@ void PangolinViewer::draw_current_pose_with_frame(std::shared_ptr<database::Lida
 
 // ===== Utility Methods =====
 
-Vector3f PangolinViewer::pcl_to_eigen(const PointType& pcl_point) const {
-    return Vector3f(pcl_point.x, pcl_point.y, pcl_point.z);
+Vector3f PangolinViewer::pcl_to_eigen(const PointType& point) const {
+    return Vector3f(point.x, point.y, point.z);
 }
 
 // ===== New Drawing Functions =====
@@ -744,7 +744,7 @@ void PangolinViewer::draw_map_points() {
     glPointSize(m_point_size);
     glColor3f(0.5f, 0.5f, 0.5f); // Gray
     glBegin(GL_POINTS);
-    for (const auto& point : m_map_cloud->points) {
+    for (const auto& point : *m_map_cloud) {
         glVertex3f(point.x, point.y, point.z);
     }
     glEnd();
@@ -757,7 +757,7 @@ void PangolinViewer::draw_pre_icp_features() {
     glPointSize(m_feature_point_size);
     glColor3f(0.0f, 0.5f, 1.0f); // Blue
     glBegin(GL_POINTS);
-    for (const auto& point : m_pre_icp_cloud->points) {
+    for (const auto& point : *m_pre_icp_cloud) {
         glVertex3f(point.x, point.y, point.z);
     }
     glEnd();
@@ -770,7 +770,7 @@ void PangolinViewer::draw_post_icp_features() {
     glPointSize(m_feature_point_size);
     glColor3f(1.0f, 0.2f, 0.2f); // Red
     glBegin(GL_POINTS);
-    for (const auto& point : m_post_icp_cloud->points) {
+    for (const auto& point : *m_post_icp_cloud) {
         glVertex3f(point.x, point.y, point.z);
     }
     glEnd();

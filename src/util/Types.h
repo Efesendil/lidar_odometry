@@ -13,8 +13,7 @@
 
 #include <Eigen/Dense>
 #include <sophus/se3.hpp>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+#include "PointCloudUtils.h"
 #include <memory>
 #include <vector>
 
@@ -47,11 +46,11 @@ using SE3d = Sophus::SE3d;
 using SO3f = Sophus::SO3f;
 using SO3d = Sophus::SO3d;
 
-// ===== PCL Type Definitions =====
+// ===== Point Cloud Type Definitions =====
 
-// Point types
-using PointType = pcl::PointXYZ;
-using PointCloud = pcl::PointCloud<PointType>;
+// Point types (using our native implementation instead of PCL)
+using PointType = Point3D;
+using PointCloud = util::PointCloud;
 using PointCloudPtr = PointCloud::Ptr;
 using PointCloudConstPtr = PointCloud::ConstPtr;
 

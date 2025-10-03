@@ -13,8 +13,8 @@
 #include "../optimization/Factors.h"
 #include "../optimization/Parameters.h"
 #include "../util/MathUtils.h"
+#include "../util/PointCloudUtils.h"
 #include <spdlog/spdlog.h>
-#include <pcl/common/transforms.h>
 #include <algorithm>
 #include <numeric>
 
@@ -56,7 +56,7 @@ bool IterativeClosestPoint::align(ICPPointCloudConstPtr source_cloud,
     m_statistics.reset();
     
     // Build KD-tree for target cloud
-    m_target_kdtree = std::make_unique<pcl::KdTreeFLANN<ICPPointType>>();
+    m_target_kdtree = std::make_unique<util::KdTree>();
     m_target_kdtree->setInputCloud(target_cloud);
     
     // Initialize pose
@@ -178,18 +178,17 @@ size_t IterativeClosestPoint::find_correspondences(ICPPointCloudConstPtr source_
 
     
     // Build KD-tree for target cloud
-    pcl::KdTreeFLANN<ICPPointType>::Ptr kdtree(new pcl::KdTreeFLANN<ICPPointType>());
+    auto kdtree = std::make_shared<util::KdTree>();
     kdtree->setInputCloud(target_cloud);
     
     // Transform source cloud with current pose
-    ICPPointCloud transformed_source;
-    pcl::transformPointCloud(*source_cloud, transformed_source, current_pose.matrix());
+    auto transformed_source = source_cloud->transformed_copy(current_pose.matrix());
     
     const int K = 5; // Number of nearest neighbors for plane fitting
     size_t valid_correspondences = 0;
     
-    for (size_t i = 0; i < transformed_source.size(); ++i) {
-        const auto& p_query = transformed_source.points[i];
+    for (size_t i = 0; i < transformed_source->size(); ++i) {
+        const auto& p_query = transformed_source->at(i);
         
         std::vector<int> point_indices(K);
         std::vector<float> point_distances(K);
@@ -208,7 +207,7 @@ size_t IterativeClosestPoint::find_correspondences(ICPPointCloudConstPtr source_
         
         bool non_colinear_found = false;
         for (int j = 0; j < found && selected_points.size() < 5; ++j) {
-            const auto& pt = target_cloud->points[point_indices[j]];
+            const auto& pt = target_cloud->at(point_indices[j]);
             ICPVector3f point(pt.x, pt.y, pt.z);
             
             if (selected_points.size() < 2) {
@@ -263,7 +262,8 @@ size_t IterativeClosestPoint::find_correspondences(ICPPointCloudConstPtr source_
         }
         
         // Calculate point-to-plane residual
-        ICPVector3f p_source = source_cloud->points[i].getVector3fMap();
+        const auto& src_pt = source_cloud->at(i);
+        ICPVector3f p_source(src_pt.x, src_pt.y, src_pt.z);
         ICPVector3f p_transformed(p_query.x, p_query.y, p_query.z);
         double residual = std::abs(plane_normal.dot(p_transformed - plane_point));
         

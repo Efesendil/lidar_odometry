@@ -23,7 +23,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 # Find system packages
 find_package(PkgConfig REQUIRED)
 find_package(Eigen3 REQUIRED)
-find_package(PCL REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Threads REQUIRED)
@@ -59,17 +58,14 @@ add_subdirectory(${CERES_DIR} ${CMAKE_BINARY_DIR}/ceres EXCLUDE_FROM_ALL)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${EIGEN3_INCLUDE_DIRS}
-    ${PCL_INCLUDE_DIRS}
     ${THIRDPARTY_DIR}/pangolin/include
     ${CMAKE_BINARY_DIR}/thirdparty/pangolin/include
     ${THIRDPARTY_DIR}/Sophus
     ${THIRDPARTY_DIR}/spdlog/include
     ${THIRDPARTY_DIR}/ceres-solver/include
     ${CMAKE_BINARY_DIR}/thirdparty/ceres-solver/include
+    ${THIRDPARTY_DIR}/nanoflann/include
 )
-
-# Add definitions
-add_definitions(${PCL_DEFINITIONS})
 
 # Source files
 set(LIDAR_ODOMETRY_SOURCES
@@ -92,6 +88,7 @@ set(LIDAR_ODOMETRY_SOURCES
     # Utility module
     src/util/Config.cpp
     src/util/MathUtils.cpp
+    src/util/PointCloudUtils.cpp
     
     # Main application
     app/kitti_lidar_odometry.cpp
@@ -111,7 +108,6 @@ endif()
 
 # Link libraries
 target_link_libraries(lidar_odometry
-    ${PCL_LIBRARIES}
     OpenGL::GL
     GLEW::GLEW
     Threads::Threads
@@ -139,8 +135,5 @@ install(DIRECTORY config/
 # Print configuration info
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")
-message(STATUS "PCL version: ${PCL_VERSION}")
-message(STATUS "PCL libraries: ${PCL_LIBRARIES}")
-message(STATUS "PCL include dirs: ${PCL_INCLUDE_DIRS}")
 message(STATUS "Eigen3 include dir: ${EIGEN3_INCLUDE_DIR}")
 message(STATUS "ThirdParty directory: ${THIRDPARTY_DIR}")

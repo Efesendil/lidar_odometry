@@ -16,17 +16,8 @@
 #include "FeatureExtractor.h"
 #include "../optimization/Factors.h"
 #include "../optimization/Parameters.h"
-#include "../optimization/AdaptiveMEstimator.h"  // Add this include
-#include "IterativeClosestPoint.h"  // Include instead of forward declaration
-
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/registration/icp.h>
-#include <pcl/registration/gicp.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/filters/crop_box.h>
-#include <pcl/common/transforms.h>
+#include "../optimization/AdaptiveMEstimator.h"
+#include "IterativeClosestPoint.h"
 
 #include <ceres/ceres.h>
 #include <sophus/se3.hpp>
@@ -226,7 +217,7 @@ private:
     
     // Processing tools
     std::shared_ptr<IterativeClosestPoint> m_icp;
-    std::unique_ptr<pcl::VoxelGrid<PointType>> m_voxel_filter;
+    std::unique_ptr<util::VoxelGrid> m_voxel_filter;
     std::unique_ptr<FeatureExtractor> m_feature_extractor;
     std::shared_ptr<optimization::AdaptiveMEstimator> m_adaptive_estimator;
     

@@ -16,9 +16,6 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 #include <sophus/se3.hpp>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/kdtree/kdtree_flann.h>
 #include "../util/Types.h"
 
 // Type definitions (declared here as needed)
@@ -30,7 +27,7 @@ namespace lidar_odometry {
     using namespace util;
     
     // KdTree type
-    using KdTree = pcl::KdTreeFLANN<PointType>;
+    using KdTree = util::KdTree;
     using KdTreePtr = std::shared_ptr<KdTree>;
     
     // Feature types

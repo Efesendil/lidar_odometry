@@ -13,10 +13,6 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/sample_consensus/ransac.h>
-#include <pcl/sample_consensus/sac_model_plane.h>
 #include <chrono>
 
 namespace lidar_odometry {
@@ -41,11 +37,10 @@ size_t FeatureExtractor::extract_features(const PointCloudConstPtr& input_cloud,
     
     // Initialize output cloud
     output_features = PointCloudPtr(new PointCloud());
-    output_features->header = input_cloud->header;
     output_features->reserve(input_cloud->size() / 10); // Rough estimate
     
     // Build KdTree for input cloud
-    pcl::KdTreeFLANN<PointType> kdtree;
+    util::KdTree kdtree;
     kdtree.setInputCloud(input_cloud);
     
     size_t valid_feature_count = 0;
@@ -57,7 +52,7 @@ size_t FeatureExtractor::extract_features(const PointCloudConstPtr& input_cloud,
             continue; // Skip already processed points
         }
         
-        const PointType& query_point = input_cloud->points[i];
+        const PointType& query_point = input_cloud->at(i);
         
         // Find neighbors for current point
         std::vector<int> neighbor_indices;
@@ -74,7 +69,7 @@ size_t FeatureExtractor::extract_features(const PointCloudConstPtr& input_cloud,
         // Extract neighbor points
         std::vector<Vector3f> neighbor_points;
         for (int j = 0; j < neighbor_count; ++j) {
-            const PointType& pt = input_cloud->points[neighbor_indices[j]];
+            const PointType& pt = input_cloud->at(neighbor_indices[j]);
             neighbor_points.emplace_back(pt.x, pt.y, pt.z);
         }
         

@@ -12,12 +12,13 @@
 #pragma once
 
 #include "../util/Types.h"
+
 #include <memory>
 #include <vector>
 #include <Eigen/Dense>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/kdtree/kdtree_flann.h>
+// #include <pcl/point_cloud.h>      // Removed PCL includes
+// #include <pcl/point_types.h>
+// #include <pcl/kdtree/kdtree_flann.h>
 
 namespace lidar_odometry {
 namespace processing {

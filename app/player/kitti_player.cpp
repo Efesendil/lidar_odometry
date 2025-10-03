@@ -23,11 +23,10 @@
 #include <set>
 #include <map>
 
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/common/transforms.h>
 #include <spdlog/spdlog.h>
 
 #include <util/Config.h>
+#include <util/PointCloudUtils.h>  // Added our point cloud utilities
 #include <util/Types.h>
 #include <processing/Estimator.h>
 #include <database/LidarFrame.h>
@@ -331,7 +330,7 @@ std::vector<PointCloudData> KittiPlayer::load_point_cloud_list(const std::string
     return point_cloud_data;
 }
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr KittiPlayer::load_point_cloud(const std::string& dataset_path, 
+util::PointCloud::Ptr KittiPlayer::load_point_cloud(const std::string& dataset_path, 
                                                                   const std::string& filename) {
     std::string velodyne_path = dataset_path;
     if (velodyne_path.back() != '/') {
@@ -339,28 +338,12 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr KittiPlayer::load_point_cloud(const std::str
     }
     velodyne_path += "velodyne/" + filename;
     
-    auto point_cloud = std::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
+    auto point_cloud = util::load_kitti_binary(velodyne_path);
     
-    std::ifstream file(velodyne_path, std::ios::binary);
-    if (!file.is_open()) {
-        spdlog::error("[KittiPlayer] Cannot open point cloud file: {}", velodyne_path);
-        return point_cloud;
+    if (!point_cloud || point_cloud->empty()) {
+        spdlog::error("[KittiPlayer] Failed to load point cloud: {}", velodyne_path);
+        return std::make_shared<util::PointCloud>();
     }
-    
-    float data[4];
-    while (file.read(reinterpret_cast<char*>(data), sizeof(data))) {
-        pcl::PointXYZ point;
-        point.x = data[0];
-        point.y = data[1];
-        point.z = data[2];
-        // Skip intensity data[3] for PointXYZ
-        point_cloud->push_back(point);
-    }
-    
-    file.close();
-    point_cloud->width = point_cloud->size();
-    point_cloud->height = 1;
-    point_cloud->is_dense = false;
     
     return point_cloud;
 }
@@ -464,7 +447,7 @@ void KittiPlayer::initialize_estimator(const util::SystemConfig& config) {
     spdlog::info("[KittiPlayer] Estimator initialized");
 }
 
-double KittiPlayer::process_single_frame(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud,
+double KittiPlayer::process_single_frame(std::shared_ptr<lidar_odometry::util::PointCloud> point_cloud,
                                         FrameContext& context) {
     auto start_time = std::chrono::high_resolution_clock::now();
     
@@ -511,7 +494,7 @@ void KittiPlayer::align_with_ground_truth(FrameContext& context, const Eigen::Ma
 
 void KittiPlayer::update_viewer(viewer::PangolinViewer& viewer,
                                const FrameContext& context,
-                               pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud) {
+                               util::PointCloudPtr point_cloud) {
     if (context.estimated_poses.empty()) return;
     
     // Update current pose

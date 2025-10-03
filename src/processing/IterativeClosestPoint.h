@@ -13,9 +13,7 @@
 
 #include <memory>
 #include <vector>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/kdtree/kdtree_flann.h>
+#include "../util/Types.h"
 #include <Eigen/Dense>
 #include <sophus/se3.hpp>
 #include <ceres/ceres.h>
@@ -24,9 +22,9 @@
 namespace lidar_odometry {
 namespace processing {
 
-// Type aliases for ICP - use simple names
-using ICPPointType = pcl::PointXYZ;
-using ICPPointCloud = pcl::PointCloud<ICPPointType>;
+// Type aliases for ICP - using our point cloud implementation
+using ICPPointType = util::Point3D;
+using ICPPointCloud = util::PointCloud;
 using ICPPointCloudPtr = std::shared_ptr<ICPPointCloud>;
 using ICPPointCloudConstPtr = std::shared_ptr<const ICPPointCloud>;
 using ICPPose = Sophus::SE3f;
@@ -227,7 +225,7 @@ private:
     ICPConfig m_config;
     
     // Target cloud KD-tree for efficient nearest neighbor search
-    std::unique_ptr<pcl::KdTreeFLANN<ICPPointType>> m_target_kdtree;
+    std::unique_ptr<util::KdTree> m_target_kdtree;
     
     // AdaptiveMEstimator for robust optimization
     std::shared_ptr<optimization::AdaptiveMEstimator> m_adaptive_estimator;

@@ -16,8 +16,7 @@
 #include <memory>
 #include <chrono>
 #include <Eigen/Dense>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+#include "../../src/util/Types.h"
 
 // Forward declarations to avoid heavy includes
 namespace lidar_odometry {
@@ -29,6 +28,7 @@ namespace lidar_odometry {
     }
     namespace util {
         struct SystemConfig;
+        class PointCloud;
     }
     namespace database {
         class LidarFrame;
@@ -206,7 +206,7 @@ private:
      * @param filename Bin filename
      * @return Loaded point cloud
      */
-    pcl::PointCloud<pcl::PointXYZ>::Ptr load_point_cloud(const std::string& dataset_path, 
+    std::shared_ptr<lidar_odometry::util::PointCloud> load_point_cloud(const std::string& dataset_path, 
                                                          const std::string& filename);
     
     /**
@@ -241,7 +241,7 @@ private:
      * @param context Frame processing context
      * @return Processing time in milliseconds
      */
-    double process_single_frame(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud,
+    double process_single_frame(std::shared_ptr<lidar_odometry::util::PointCloud> point_cloud,
                                FrameContext& context);
     
     /**
@@ -261,7 +261,7 @@ private:
      */
     void update_viewer(viewer::PangolinViewer& viewer,
                       const FrameContext& context,
-                      pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud);
+                      util::PointCloudPtr point_cloud);
     
     /**
      * @brief Handle viewer UI controls

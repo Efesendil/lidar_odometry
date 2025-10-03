@@ -34,7 +34,6 @@ else
         libgoogle-glog-dev \
         libatlas-base-dev \
         libsuitesparse-dev \
-        libpcl-dev \
         libyaml-cpp-dev
 
     echo "System dependencies installed successfully!"

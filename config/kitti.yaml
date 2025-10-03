@@ -2,7 +2,7 @@
 data_directory: "/home/eugene/data/KITTI/Velodyne"
 ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
 output_directory: "/home/eugene/data/KITTI/Result"
-seq: "07"
+seq: "01"
 
 # Player settings
 player:
@@ -15,8 +15,8 @@ player:
 
 # Point cloud processing
 point_cloud:
-  voxel_size: 0.4
-  map_voxel_size: 0.4                 # Map points downsampling voxel size
+  voxel_size: 0.4                    # Very small voxel size (almost no downsampling)
+  map_voxel_size: 0.4                # Map points downsampling voxel size
   max_range: 40.0
   min_range: 0.1
 

@@ -10,7 +10,7 @@
  */
 
 #include "LidarFrame.h"
-#include <pcl/common/transforms.h>
+#include "../util/PointCloudUtils.h"
 #include <spdlog/spdlog.h>
 
 namespace lidar_odometry {
@@ -108,11 +108,11 @@ PointCloudPtr LidarFrame::get_world_cloud() const {
     // Transform cloud to world coordinates
     PointCloudPtr world_cloud = std::make_shared<PointCloud>();
     
-    // Convert SE3f to Matrix4f for PCL transformation
+    // Convert SE3f to Matrix4f for transformation
     Matrix4f transform_matrix = m_pose.matrix();
     
     try {
-        pcl::transformPointCloud(*cloud_to_transform, *world_cloud, transform_matrix);
+        util::transform_point_cloud(cloud_to_transform, world_cloud, transform_matrix);
     } catch (const std::exception& e) {
         spdlog::error("[LidarFrame] Frame {} world cloud transformation failed: {}", m_frame_id, e.what());
         return std::make_shared<PointCloud>();

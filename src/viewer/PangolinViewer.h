@@ -25,8 +25,7 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+#include "../util/Types.h"
 
 // Forward declarations
 namespace lidar_odometry {
@@ -38,8 +37,8 @@ class LidarFrame;
 namespace lidar_odometry {
 namespace viewer {
 
-using PointType = pcl::PointXYZ;  // Use consistent point type
-using PointCloud = pcl::PointCloud<PointType>;
+using PointType = util::Point3D;  // Use our point type
+using PointCloud = util::PointCloud;
 using PointCloudPtr = PointCloud::Ptr;
 using PointCloudConstPtr = PointCloud::ConstPtr;
 using Vector3f = Eigen::Vector3f;
@@ -275,11 +274,11 @@ private:
     void draw_current_pose_with_frame(std::shared_ptr<database::LidarFrame> frame);
     
     /**
-     * @brief Convert PCL point to Eigen vector
-     * @param pcl_point PCL point
+     * @brief Convert Point3D to Eigen vector
+     * @param point Point3D point
      * @return Eigen vector
      */
-    Vector3f pcl_to_eigen(const PointType& pcl_point) const;
+    Vector3f pcl_to_eigen(const PointType& point) const;
 };
 
 } // namespace viewer
