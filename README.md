@@ -72,15 +72,6 @@ For complete evaluation, download the full KITTI dataset from:
 - `config/`: Configuration files
 - `build.sh`: Build script for native compilation
 
-## Dependencies
-
-- **PCL** (Point Cloud Library)
-- **Eigen3** - Linear algebra
-- **Ceres Solver** - Non-linear optimization
-- **Pangolin** - 3D visualization
-- **OpenGL** - Graphics rendering
-- **YAML-cpp** - Configuration parsing
-
 ## System Requirements
 
 - **Ubuntu 20.04/22.04** (recommended)
