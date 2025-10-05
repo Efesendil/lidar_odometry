@@ -319,7 +319,7 @@ void AdaptiveMEstimator::fit_gmm(const std::vector<double>& residuals) {
     std::vector<int> indices(n);
     std::iota(indices.begin(), indices.end(), 0);
     std::random_device rd;
-    std::mt19937 g(rd()); // 백업과 동일: 실제 랜덤 시드
+    std::mt19937 g(42); // 백업과 동일: 실제 랜덤 시드
     std::shuffle(indices.begin(), indices.end(), g);
 
     std::vector<double> sampled_data(sample_size);

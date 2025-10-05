@@ -80,17 +80,17 @@ bool PointToPlaneFactor::Evaluate(double const* const* parameters,
             // d(residual)/d(tangent) = information_weight * robust_weight * d(n^T * (R*p + t - q))/d(tangent)
             
             // Translation part: d(n^T * (R*p + t - q))/d(t) = n^T
-            Eigen::Vector3d jac_translation = n;
+            Eigen::Vector3d jac_translation = n.transpose()*R;
             
             // Rotation part: d(n^T * (R*p + t - q))/d(so3) = n^T * d(R*p)/d(so3)
             // Using right perturbation: d(R*p)/d(so3) = -R*p^× (skew-symmetric)
-            Eigen::Vector3d Rp = R * p;
-            Eigen::Matrix3d Rp_skew;
-            Rp_skew << 0, -Rp(2), Rp(1),
-                      Rp(2), 0, -Rp(0),
-                     -Rp(1), Rp(0), 0;
-            Eigen::Vector3d jac_rotation = -n.transpose() * Rp_skew;
-            
+            // Eigen::Vector3d Rp = R * p;
+            Eigen::Matrix3d p_skew;
+            p_skew << 0, -p(2), p(1),
+                      p(2), 0, -p(0),
+                     -p(1), p(0), 0;
+            Eigen::Vector3d jac_rotation = -n.transpose() *R* p_skew;
+
             // Combine jacobians with weighting (only information weight)
             // Robust weighting is handled by Ceres Loss Function
             double weight = m_information_weight;
