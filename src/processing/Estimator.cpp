@@ -331,6 +331,8 @@ void Estimator::create_keyframe(std::shared_ptr<database::LidarFrame> frame)
     crop_box.filter(*cropped_feature_map);
     
     m_feature_map = cropped_feature_map;
+
+    m_last_keyframe_pose = frame->get_pose();
     
     spdlog::debug("[Estimator] Keyframe created: {} -> {} -> {} points after voxel+crop", 
                   global_feature_cloud->size(), new_feature_map->size(), m_feature_map->size());
