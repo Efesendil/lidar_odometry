@@ -30,6 +30,8 @@ LidarFrame::LidarFrame(int frame_id,
     , m_feature_cloud(nullptr)
     , m_kdtree(nullptr)
     , m_kdtree_built(false)
+    , m_local_map_kdtree(nullptr)
+    , m_local_map_kdtree_built(false)
     , m_is_fixed(false)
     , m_is_keyframe(false)
     , m_has_ground_truth(false) {
@@ -87,6 +89,9 @@ void LidarFrame::set_feature_cloud(const PointCloudPtr& feature_cloud) {
     if (!m_feature_cloud) {
         spdlog::warn("[LidarFrame] Frame {} feature cloud set to null", m_frame_id);
     }
+
+    // util::transform_point_cloud(m_feature_cloud, m_feature_cloud_global, m_pose.matrix());
+
 }
 
 void LidarFrame::set_feature_cloud_global(const PointCloudPtr& feature_cloud_global) {
@@ -94,6 +99,16 @@ void LidarFrame::set_feature_cloud_global(const PointCloudPtr& feature_cloud_glo
     
     if (!m_feature_cloud_global) {
         spdlog::warn("[LidarFrame] Frame {} global feature cloud set to null", m_frame_id);
+    }
+}
+
+void LidarFrame::set_local_map(const PointCloudPtr& local_map) {
+    m_local_map = local_map;
+    
+    if (!m_local_map) {
+        spdlog::warn("[LidarFrame] Frame {} local map set to null", m_frame_id);
+    } else {
+        spdlog::debug("[LidarFrame] Frame {} local map set with {} points", m_frame_id, m_local_map->size());
     }
 }
 
@@ -193,6 +208,31 @@ size_t LidarFrame::get_correspondence_count() const {
 float LidarFrame::compute_distance_to(const LidarFrame& other) const {
     Vector3f translation_diff = m_pose.translation() - other.m_pose.translation();
     return translation_diff.norm();
+}
+
+void LidarFrame::build_local_map_kdtree() {
+    if (!m_local_map || m_local_map->empty()) {
+        spdlog::warn("[LidarFrame] Cannot build KdTree: local map is empty for frame {}", m_frame_id);
+        m_local_map_kdtree_built = false;
+        return;
+    }
+    
+    if (!m_local_map_kdtree) {
+        m_local_map_kdtree = std::make_unique<util::KdTree>();
+    }
+    
+    m_local_map_kdtree->setInputCloud(m_local_map);
+    m_local_map_kdtree_built = true;
+    
+    spdlog::debug("[LidarFrame] Built KdTree for local map with {} points in frame {}", 
+                  m_local_map->size(), m_frame_id);
+}
+
+KdTreePtr LidarFrame::get_local_map_kdtree() {
+    if (m_local_map_kdtree_built && m_local_map_kdtree) {
+        return m_local_map_kdtree;
+    }
+    return nullptr;
 }
 
 } // namespace database

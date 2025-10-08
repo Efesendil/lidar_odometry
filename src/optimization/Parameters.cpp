@@ -36,10 +36,10 @@ bool SE3GlobalParameterization::Plus(const double* x,
         // Convert current tangent to SE3
         Sophus::SE3d current_se3 = tangent_to_se3(current_tangent);
         
-        // Apply delta as right multiplication: current * exp(delta)
-        // This is appropriate for Twb (body to world) where perturbation is in body frame
+        // Apply delta as left multiplication: exp(delta) * current  
+        // This matches g2o convention for pose updates
         Sophus::SE3d delta_se3 = Sophus::SE3d::exp(delta_tangent);
-        Sophus::SE3d result_se3 = current_se3 * delta_se3;
+        Sophus::SE3d result_se3 = current_se3*delta_se3;
         
         // Convert back to tangent space
         result_tangent = se3_to_tangent(result_se3);

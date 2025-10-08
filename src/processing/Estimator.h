@@ -12,12 +12,13 @@
 #pragma once
 
 #include "../util/Types.h"
+#include "../util/Config.h"
 #include "../database/LidarFrame.h"
 #include "FeatureExtractor.h"
 #include "../optimization/Factors.h"
 #include "../optimization/Parameters.h"
 #include "../optimization/AdaptiveMEstimator.h"
-#include "IterativeClosestPoint.h"
+#include "DualFrameICPOptimizer.h"
 
 #include <ceres/ceres.h>
 #include <sophus/se3.hpp>
@@ -34,56 +35,6 @@ namespace processing {
 using namespace lidar_odometry::util;
 
 /**
- * @brief Configuration for the Estimator
- */
-struct EstimatorConfig {
-    // ICP parameters (from YAML odometry section)
-    size_t max_icp_iterations = 50;
-    double icp_translation_threshold = 0.001;  // Translation convergence threshold (meters)
-    double icp_rotation_threshold = 0.001;     // Rotation convergence threshold (radians)
-    double correspondence_distance = 1.0;
-    double transformation_epsilon = 1e-6;
-    double euclidean_fitness_epsilon = 1e-6;
-    
-    // Robust estimation parameters (from YAML robust_estimation section)
-    bool use_adaptive_m_estimator = true;
-    std::string loss_type = "huber";
-    std::string scale_method = "MAD";
-    double fixed_scale_factor = 1.0;
-    double mad_multiplier = 1.4826;
-    double min_scale_factor = 0.01;                // Also used as PKO alpha lower bound
-    double max_scale_factor = 10.0;               // Also used as PKO alpha upper bound
-    
-    // PKO (Probabilistic Kernel Optimization) parameters
-    int num_alpha_segments = 1000;
-    double truncated_threshold = 10.0;
-    int gmm_components = 3;
-    int gmm_sample_size = 100;
-    std::string pko_kernel_type = "cauchy";
-    
-    // Mapping parameters
-    double voxel_size = 0.4;  // Voxel size for input cloud downsampling
-    double map_voxel_size = 0.2;  // Voxel size for map downsampling
-    double max_range = 100.0;  // Max range for crop box filter
-    size_t max_map_frames = 50;
-    double keyframe_distance_threshold = 1.0;
-    double keyframe_rotation_threshold = 0.2;  // radians
-    
-    // Ceres optimization
-    size_t max_solver_iterations = 100;
-    double parameter_tolerance = 1e-8;
-    double function_tolerance = 1e-8;
-    
-    // Feature matching
-    double max_correspondence_distance = 2.0;
-    size_t min_correspondence_points = 10;
-    
-    // Local map parameters
-    size_t local_map_size = 20;
-    double local_map_radius = 50.0;
-};
-
-/**
  * @brief LiDAR odometry estimator
  * 
  * This class performs:
@@ -96,9 +47,9 @@ class Estimator {
 public:
     /**
      * @brief Constructor
-     * @param config Estimator configuration
+     * @param config Configuration from YAML file
      */
-    explicit Estimator(const EstimatorConfig& config = EstimatorConfig());
+    explicit Estimator(const util::SystemConfig& config);
     
     /**
      * @brief Destructor
@@ -118,19 +69,25 @@ public:
      * @brief Update configuration
      * @param config New configuration
      */
-    void update_config(const EstimatorConfig& config);
+    void update_config(const util::SystemConfig& config);
     
     /**
      * @brief Get current configuration
      * @return Current configuration
      */
-    const EstimatorConfig& get_config() const;
+    const util::SystemConfig& get_config() const;
     
     /**
      * @brief Get local map for visualization
      * @return Const pointer to local map
      */
     PointCloudConstPtr get_local_map() const;
+    
+    /**
+     * @brief Get last keyframe's local map for visualization
+     * @return Const pointer to last keyframe's local map, nullptr if no keyframes
+     */
+    PointCloudConstPtr get_last_keyframe_map() const;
 
     /**
     * @brief Get current pose
@@ -139,11 +96,11 @@ public:
     const SE3f& get_current_pose() const;
 
     /**
-     * @brief Get ICP statistics
-     * @param avg_iterations Average iterations per ICP call
-     * @param avg_time_ms Average time per ICP call in milliseconds
+     * @brief Get dual frame optimization statistics
+     * @param avg_iterations Average iterations per optimization call
+     * @param avg_time_ms Average time per optimization call in milliseconds
      */
-    void get_icp_statistics(double& avg_iterations, double& avg_time_ms) const;
+    void get_optimization_statistics(double& avg_iterations, double& avg_time_ms) const;
     
     /**
      * @brief Get debug clouds for visualization
@@ -151,6 +108,19 @@ public:
      * @param post_icp_cloud Output post-ICP cloud
      */
     void get_debug_clouds(PointCloudConstPtr& pre_icp_cloud, PointCloudConstPtr& post_icp_cloud) const;
+    
+    /**
+     * @brief Get number of keyframes
+     * @return Number of keyframes created so far
+     */
+    size_t get_keyframe_count() const;
+    
+    /**
+     * @brief Get keyframe by index
+     * @param index Keyframe index
+     * @return Keyframe at the given index, nullptr if index out of bounds
+     */
+    std::shared_ptr<database::LidarFrame> get_keyframe(size_t index) const;
 
 private:
     // ===== Internal Processing =====
@@ -169,15 +139,22 @@ private:
     void initialize_first_frame(std::shared_ptr<database::LidarFrame> frame);
     
     /**
-     * @brief Estimate motion between frames using ICP
-     * @param current_features Current feature cloud
-     * @param previous_features Previous feature cloud
+     * @brief Estimate motion between frames using DualFrameICPOptimizer
+     * @param current_frame Current frame with features
+     * @param keyframe Reference keyframe with local map
      * @param initial_guess Initial transformation guess
-     * @return Estimated transformation
+     * @return Estimated transformation from keyframe to current
      */
-    SE3f estimate_motion_icp(PointCloudConstPtr current_features,
-                            PointCloudConstPtr previous_features,
-                            const SE3f& initial_guess = SE3f());
+    SE3f estimate_motion_dual_frame(std::shared_ptr<database::LidarFrame> current_frame,
+                                   std::shared_ptr<database::LidarFrame> keyframe,
+                                   const SE3f& initial_guess = SE3f());
+    
+    /**
+     * @brief Select best keyframe for current frame
+     * @param current_pose Current frame pose
+     * @return Best keyframe for optimization, nullptr if none suitable
+     */
+    std::shared_ptr<database::LidarFrame> select_best_keyframe(const SE3f& current_pose);
     
     /**
      * @brief Check if current frame should be a keyframe
@@ -196,7 +173,7 @@ private:
 
 private:
     // Configuration
-    EstimatorConfig m_config;
+    util::SystemConfig m_config;
     
     // State
     bool m_initialized;
@@ -216,18 +193,22 @@ private:
     PointCloudPtr m_debug_post_icp_cloud;
     
     // Processing tools
-    std::shared_ptr<IterativeClosestPoint> m_icp;
+    std::shared_ptr<DualFrameICPOptimizer> m_dual_optimizer;
     std::unique_ptr<util::VoxelGrid> m_voxel_filter;
     std::unique_ptr<FeatureExtractor> m_feature_extractor;
     std::shared_ptr<optimization::AdaptiveMEstimator> m_adaptive_estimator;
     
+    // Last keyframe for optimization
+    std::shared_ptr<database::LidarFrame> m_last_keyframe;
+    
     // Last keyframe pose for keyframe decision
     SE3f m_last_keyframe_pose;
     
-    // ICP statistics
-    mutable size_t m_total_icp_iterations;
-    mutable double m_total_icp_time_ms;
-    mutable size_t m_icp_call_count;
+    // Optimization statistics (changed from ICP to dual frame)
+    mutable size_t m_total_optimization_iterations;
+    mutable double m_total_optimization_time_ms;
+    mutable size_t m_optimization_call_count;
+
 };
 
 } // namespace processing

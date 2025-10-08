@@ -133,6 +133,9 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         if (config_map.find("feature_extraction.feature_quality_threshold") != config_map.end()) {
             m_config.feature_quality_threshold = std::stof(config_map["feature_extraction.feature_quality_threshold"]);
         }
+        if (config_map.find("feature_extraction.feature_voxel_size") != config_map.end()) {
+            m_config.feature_voxel_size = std::stof(config_map["feature_extraction.feature_voxel_size"]);
+        }
         
         // Odometry
         if (config_map.find("odometry.max_iterations") != config_map.end()) {

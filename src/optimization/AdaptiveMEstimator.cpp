@@ -318,8 +318,8 @@ void AdaptiveMEstimator::fit_gmm(const std::vector<double>& residuals) {
     // 2. 데이터에서 임의로 샘플 추출 (백업과 완전히 동일)
     std::vector<int> indices(n);
     std::iota(indices.begin(), indices.end(), 0);
-    std::random_device rd;
-    std::mt19937 g(42); // 백업과 동일: 실제 랜덤 시드
+    // Use fixed seed for consistent results
+    std::mt19937 g(42); // Fixed seed instead of random_device
     std::shuffle(indices.begin(), indices.end(), g);
 
     std::vector<double> sampled_data(sample_size);
@@ -332,9 +332,8 @@ void AdaptiveMEstimator::fit_gmm(const std::vector<double>& residuals) {
     
     // 3. 파라미터 초기화 (백업과 완전히 동일)
     
-    // K-means 초기화 (백업 함수와 동일)
-    std::random_device rd2;
-    std::mt19937 gen(42);
+    // K-means 초기화 (fixed seed for consistency)
+    std::mt19937 gen(42); // Fixed seed
     std::uniform_int_distribution<> dis(0, sampled_data.size() - 1);
 
     m_gmm_means.resize(m_config.gmm_components);
@@ -501,8 +500,7 @@ void AdaptiveMEstimator::kmeans_init(const std::vector<double>& residuals) {
     // 데이터에서 임의로 샘플 추출
     std::vector<int> indices(n);
     std::iota(indices.begin(), indices.end(), 0);
-    std::random_device rd;
-    std::mt19937 g(rd());
+    std::mt19937 g(42); // Fixed seed for consistency
     std::shuffle(indices.begin(), indices.end(), g);
 
     std::vector<double> sampled_data(sample_size);
@@ -528,8 +526,7 @@ void AdaptiveMEstimator::kmeans_init(const std::vector<double>& residuals) {
         // Pick이 부족하면 기존 K-means++ 방식 사용
         spdlog::debug("[AdaptiveMEstimator] Insufficient picks ({}), using K-means++ initialization", picks.size());
         
-        std::random_device rd2;
-        std::mt19937 gen(42);
+        std::mt19937 gen(42); // Fixed seed for consistency
         std::uniform_int_distribution<> dis(0, sampled_data.size() - 1);
 
         for (int i = 0; i < m_config.gmm_components; ++i) {

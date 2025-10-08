@@ -72,7 +72,7 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
         // Fill ground truth poses in context (disabled)
         // GT processing disabled - trajectory saved for EVO evaluation
         
-        spdlog::info("[KittiPlayer] Processing frames {} to {} (step mode: {})", 0, point_cloud_data.size(), config.step_mode ? "enabled" : "disabled");
+        // spdlog::info("[KittiPlayer] Processing frames {} to {} (step mode: {})", 0, point_cloud_data.size(), config.step_mode ? "enabled" : "disabled");
         
         context.current_idx = 0;
         while (context.current_idx < point_cloud_data.size()) {
@@ -138,13 +138,13 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
                 ++context.current_idx;
                 ++context.processed_frames;
                 
-                // Sleep in auto mode for real-time visualization
-                if (context.auto_play) {
-                    double sleep_time_ms = 100 - total_time_ms;
-                    if (sleep_time_ms > 0) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
-                    }
-                }
+                // // Sleep in auto mode for real-time visualization
+                // if (context.auto_play) {
+                //     double sleep_time_ms = 100 - total_time_ms;
+                //     if (sleep_time_ms > 0) {
+                //         std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
+                //     }
+                // }
             }
         }
         
@@ -181,7 +181,7 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
         
         // Get ICP statistics from estimator
         double avg_icp_iterations, avg_icp_time_ms;
-        m_estimator->get_icp_statistics(avg_icp_iterations, avg_icp_time_ms);
+        m_estimator->get_optimization_statistics(avg_icp_iterations, avg_icp_time_ms);
         
         spdlog::info("[KittiPlayer] ICP Statistics:");
         spdlog::info("  - Average iterations per ICP: {:.2f}", avg_icp_iterations);
@@ -348,43 +348,6 @@ util::PointCloud::Ptr KittiPlayer::load_point_cloud(const std::string& dataset_p
     return point_cloud;
 }
 
-std::vector<GroundTruthPose> KittiPlayer::load_ground_truth_poses(const std::string& gt_path,
-                                                                  const std::vector<PointCloudData>& frame_list) {
-    std::vector<GroundTruthPose> gt_poses;
-    
-    std::ifstream file(gt_path);
-    if (!file.is_open()) {
-        spdlog::error("[KittiPlayer] Cannot open ground truth file: {}", gt_path);
-        return gt_poses;
-    }
-    
-    // KITTI Tr transformation matrix (Camera to Velodyne)
-    Eigen::Matrix4f Tr = Eigen::Matrix4f::Identity();
-    Tr(0, 0) = -1.857739385241e-03; Tr(0, 1) = -9.999659513510e-01; Tr(0, 2) = -8.039975204516e-03; Tr(0, 3) = -4.784029760483e-03;
-    Tr(1, 0) = -6.481465826011e-03; Tr(1, 1) = 8.051860151134e-03;  Tr(1, 2) = -9.999466081774e-01; Tr(1, 3) = -7.337429464231e-02;
-    Tr(2, 0) = 9.999773098287e-01;  Tr(2, 1) = -1.805528627661e-03; Tr(2, 2) = -6.496203536139e-03; Tr(2, 3) = -3.339968064433e-01;
-    
-    std::string line;
-    int line_idx = 0;
-    
-    while (std::getline(file, line) && line_idx < static_cast<int>(frame_list.size())) {
-        if (line.empty()) continue;
-        
-        // Find corresponding frame
-        int target_frame_id = frame_list[line_idx].frame_id;
-        
-        GroundTruthPose gt_pose;
-        gt_pose.frame_id = target_frame_id;
-        gt_pose.pose = Tr.inverse() * parse_kitti_pose(line);  // Apply Tr transformation
-        gt_poses.push_back(gt_pose);
-        
-        ++line_idx;
-    }
-    
-    file.close();
-    return gt_poses;
-}
-
 std::shared_ptr<viewer::PangolinViewer> KittiPlayer::initialize_viewer(const KittiPlayerConfig& config) {
     if (!config.enable_viewer) {
         return nullptr;
@@ -408,42 +371,8 @@ std::shared_ptr<viewer::PangolinViewer> KittiPlayer::initialize_viewer(const Kit
 }
 
 void KittiPlayer::initialize_estimator(const util::SystemConfig& config) {
-    // Convert SystemConfig to EstimatorConfig
-    processing::EstimatorConfig estimator_config;
-    
-    // Map system config values to estimator config
-    estimator_config.max_icp_iterations = config.max_iterations;
-    estimator_config.icp_translation_threshold = config.translation_threshold;
-    estimator_config.icp_rotation_threshold = config.rotation_threshold;
-    estimator_config.correspondence_distance = config.max_correspondence_distance;
-    estimator_config.voxel_size = config.voxel_size;
-    estimator_config.map_voxel_size = config.map_voxel_size;
-    estimator_config.max_range = config.max_range;
-    estimator_config.keyframe_distance_threshold = config.keyframe_distance_threshold;
-    estimator_config.keyframe_rotation_threshold = config.keyframe_rotation_threshold;
-    estimator_config.max_solver_iterations = config.max_solver_iterations;
-    estimator_config.parameter_tolerance = config.parameter_tolerance;
-    estimator_config.function_tolerance = config.function_tolerance;
-    estimator_config.max_correspondence_distance = config.max_correspondence_distance;
-    estimator_config.min_correspondence_points = config.min_correspondence_points;
-    
-    // Map robust estimation settings
-    estimator_config.use_adaptive_m_estimator = config.use_adaptive_m_estimator;
-    estimator_config.loss_type = config.loss_type;
-    estimator_config.scale_method = config.scale_method;
-    estimator_config.fixed_scale_factor = config.fixed_scale_factor;
-    estimator_config.mad_multiplier = config.mad_multiplier;
-    estimator_config.min_scale_factor = config.min_scale_factor;
-    estimator_config.max_scale_factor = config.max_scale_factor;
-    
-    // Map PKO/GMM parameters (CRITICAL: was missing!)
-    estimator_config.num_alpha_segments = config.num_alpha_segments;
-    estimator_config.truncated_threshold = config.truncated_threshold;
-    estimator_config.gmm_components = config.gmm_components;
-    estimator_config.gmm_sample_size = config.gmm_sample_size;
-    estimator_config.pko_kernel_type = config.pko_kernel_type;
-    
-    m_estimator = std::make_shared<processing::Estimator>(estimator_config);
+    // Create estimator directly with SystemConfig
+    m_estimator = std::make_unique<processing::Estimator>(config);
     spdlog::info("[KittiPlayer] Estimator initialized");
 }
 
@@ -518,6 +447,27 @@ void KittiPlayer::update_viewer(viewer::PangolinViewer& viewer,
         auto local_map = m_estimator->get_local_map();
         if (local_map && !local_map->empty()) {
             viewer.update_map_points(local_map);
+        }
+        
+        // Check for new keyframes and add to viewer
+        size_t current_keyframe_count = m_estimator->get_keyframe_count();
+        if (current_keyframe_count > m_last_keyframe_count) {
+            // Add new keyframes to viewer
+            for (size_t i = m_last_keyframe_count; i < current_keyframe_count; ++i) {
+                auto keyframe = m_estimator->get_keyframe(i);
+                if (keyframe) {
+                    viewer.add_keyframe(keyframe->get_pose().matrix(), 
+                                       static_cast<int>(keyframe->get_frame_id()));
+                    // spdlog::info("[KittiPlayer] Added keyframe {} to viewer", keyframe->get_frame_id());
+                }
+            }
+            m_last_keyframe_count = current_keyframe_count;
+        }
+        
+        // Update last keyframe map for visualization
+        auto last_keyframe_map = m_estimator->get_last_keyframe_map();
+        if (last_keyframe_map && !last_keyframe_map->empty()) {
+            viewer.update_last_keyframe_map(last_keyframe_map);
         }
         
         // Update ICP debug clouds if available

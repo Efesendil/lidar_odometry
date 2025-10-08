@@ -28,14 +28,15 @@ PangolinViewer::PangolinViewer()
     : m_should_stop(false)
     , m_thread_ready(false)
     , m_auto_mode("ui.1. Auto Mode", true, true)
-    , m_show_map_points("ui.2. Show Map Points (Gray)", true, true)
     , m_show_point_cloud("ui.3. Show Point Cloud (Red-Blue)", true, true)
     , m_show_features("ui.4. Show Features (Mint)", true, true)
     , m_show_trajectory("ui.5. Show Trajectory", true, true)
-    , m_show_coordinate_frame("ui.6. Show Coordinate Frame", true, true)
-    , m_top_view_follow("ui.7. Top View Follow", false, true)
-    , m_step_forward_button("ui.8. Step Forward", false, false)
-    , m_finish_button("ui.9. Finish & Exit", false, false)
+    , m_show_keyframes("ui.6. Show Keyframes", true, true)
+    , m_show_keyframe_map("ui.7. Show Keyframe Map (Gray)", true, true)
+    , m_show_coordinate_frame("ui.8. Show Coordinate Frame", true, true)
+    , m_top_view_follow("ui.9. Top View Follow", false, true)
+    , m_step_forward_button("ui.10. Step Forward", false, false)
+    , m_finish_button("ui.11. Finish & Exit", false, false)
     , m_frame_id("info.Frame ID", 0)
     , m_total_points("info.Total Points", 0)
     , m_feature_count("info.Feature Count", 0)
@@ -231,16 +232,16 @@ void PangolinViewer::render_loop() {
             draw_coordinate_axes();
         }
 
-        // Draw map points (Gray) - using local copy
-        if (m_show_map_points.Get() && map_cloud_copy) {
-            glPointSize(m_point_size);
-            glColor3f(0.5f, 0.5f, 0.5f); // Gray
-            glBegin(GL_POINTS);
-            for (const auto& point : *map_cloud_copy) {
-                glVertex3f(point.x, point.y, point.z);
-            }
-            glEnd();
-        }
+        // // Draw map points (Gray) - using local copy
+        // if (m_show_map_points.Get() && map_cloud_copy) {
+        //     glPointSize(m_point_size);
+        //     glColor3f(0.5f, 0.5f, 0.5f); // Gray
+        //     glBegin(GL_POINTS);
+        //     for (const auto& point : *map_cloud_copy) {
+        //         glVertex3f(point.x, point.y, point.z);
+        //     }
+        //     glEnd();
+        // }
 
         // Draw current frame point cloud - using local copy
         if (m_show_point_cloud.Get() && current_frame) {
@@ -275,6 +276,16 @@ void PangolinViewer::render_loop() {
         // Draw trajectory - using local copy
         if (m_show_trajectory.Get() && trajectory_copy.size() > 1) {
             draw_trajectory_with_data(trajectory_copy);
+        }
+
+        // Draw keyframes
+        if (m_show_keyframes.Get()) {
+            draw_keyframes();
+        }
+
+        // Draw last keyframe map
+        if (m_show_keyframe_map.Get()) {
+            draw_last_keyframe_map();
         }
 
         // Draw current pose - using local copy
@@ -336,7 +347,6 @@ void PangolinViewer::render_loop() {
         if (++ui_update_counter % 10 == 1) { // Check more frequently (every 10 frames)
             // Access all UI variables to ensure they're rendered in the panel
             bool auto_mode = m_auto_mode.Get();
-            bool show_map = m_show_map_points.Get();
             bool show_point_cloud = m_show_point_cloud.Get();
             bool show_features = m_show_features.Get();
             bool show_trajectory = m_show_trajectory.Get();
@@ -771,6 +781,104 @@ void PangolinViewer::draw_post_icp_features() {
     glColor3f(1.0f, 0.2f, 0.2f); // Red
     glBegin(GL_POINTS);
     for (const auto& point : *m_post_icp_cloud) {
+        glVertex3f(point.x, point.y, point.z);
+    }
+    glEnd();
+}
+
+void PangolinViewer::add_keyframe(const Matrix4f& keyframe_pose, int keyframe_id) {
+    std::lock_guard<std::mutex> lock(m_data_mutex);
+    
+    KeyframeData keyframe_data;
+    keyframe_data.pose = keyframe_pose;
+    keyframe_data.id = keyframe_id;
+    
+    m_keyframes.push_back(keyframe_data);
+    
+    spdlog::debug("[PangolinViewer] Added keyframe {} at position ({:.2f}, {:.2f}, {:.2f})",
+                  keyframe_id, keyframe_pose(0,3), keyframe_pose(1,3), keyframe_pose(2,3));
+}
+
+void PangolinViewer::clear_keyframes() {
+    std::lock_guard<std::mutex> lock(m_data_mutex);
+    m_keyframes.clear();
+    spdlog::debug("[PangolinViewer] Cleared all keyframes");
+}
+
+void PangolinViewer::draw_keyframes() {
+    std::lock_guard<std::mutex> lock(m_data_mutex);
+    
+    if (m_keyframes.empty()) return;
+
+
+
+    
+    glLineWidth(m_coordinate_frame_width);
+    
+    for (const auto& keyframe : m_keyframes) {
+        const Matrix4f& pose = keyframe.pose;
+        
+        // Extract position and rotation from pose matrix
+        Vector3f position = pose.block<3,1>(0,3);
+        Matrix3f rotation = pose.block<3,3>(0,0);
+        
+        // Scale for keyframe coordinate axes (smaller than current pose)
+        float axis_length = m_coordinate_frame_size * 0.4f;
+        
+        // X-axis (Red)
+        Vector3f x_axis = rotation.col(0) * axis_length;
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glBegin(GL_LINES);
+        glVertex3f(position.x(), position.y(), position.z());
+        glVertex3f(position.x() + x_axis.x(), position.y() + x_axis.y(), position.z() + x_axis.z());
+        glEnd();
+        
+        // Y-axis (Green)
+        Vector3f y_axis = rotation.col(1) * axis_length;
+        glColor3f(0.0f, 1.0f, 0.0f);
+        glBegin(GL_LINES);
+        glVertex3f(position.x(), position.y(), position.z());
+        glVertex3f(position.x() + y_axis.x(), position.y() + y_axis.y(), position.z() + y_axis.z());
+        glEnd();
+        
+        // Z-axis (Blue)
+        Vector3f z_axis = rotation.col(2) * axis_length;
+        glColor3f(0.0f, 0.0f, 1.0f);
+        glBegin(GL_LINES);
+        glVertex3f(position.x(), position.y(), position.z());
+        glVertex3f(position.x() + z_axis.x(), position.y() + z_axis.y(), position.z() + z_axis.z());
+        glEnd();
+        
+        // Draw keyframe ID as a small sphere/point
+        glPointSize(8.0f);
+        glColor3f(1.0f, 1.0f, 0.0f); // Yellow
+        glBegin(GL_POINTS);
+        glVertex3f(position.x(), position.y(), position.z());
+        glEnd();
+    }
+}
+
+void PangolinViewer::update_last_keyframe_map(PointCloudConstPtr keyframe_map) {
+    std::lock_guard<std::mutex> lock(m_data_mutex);
+    m_last_keyframe_map = keyframe_map;
+    
+    if (keyframe_map) {
+        spdlog::debug("[PangolinViewer] Updated last keyframe map with {} points", keyframe_map->size());
+    } else {
+        spdlog::debug("[PangolinViewer] Cleared last keyframe map");
+    }
+}
+
+void PangolinViewer::draw_last_keyframe_map() {
+    std::lock_guard<std::mutex> lock(m_data_mutex);
+
+    if (!m_last_keyframe_map || m_last_keyframe_map->empty()) return;
+    
+    glPointSize(m_feature_point_size/3.0f);
+    glColor3f(0.5f, 0.5f, 0.5f); // Gray
+    
+    glBegin(GL_POINTS);
+    for (const auto& point : *m_last_keyframe_map) {
         glVertex3f(point.x, point.y, point.z);
     }
     glEnd();

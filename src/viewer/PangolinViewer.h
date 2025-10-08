@@ -117,6 +117,24 @@ public:
                                 PointCloudConstPtr post_icp_cloud);
     
     /**
+     * @brief Add keyframe for visualization
+     * @param keyframe_pose Keyframe pose in world coordinates
+     * @param keyframe_id Unique ID for the keyframe
+     */
+    void add_keyframe(const Matrix4f& keyframe_pose, int keyframe_id);
+    
+    /**
+     * @brief Clear all keyframes
+     */
+    void clear_keyframes();
+    
+    /**
+     * @brief Update last keyframe local map for visualization
+     * @param keyframe_map Last keyframe's local map points (world coordinates)
+     */
+    void update_last_keyframe_map(PointCloudConstPtr keyframe_map);
+    
+    /**
      * @brief Add pose to trajectory
      * @param pose Pose to add to trajectory
      */
@@ -159,10 +177,18 @@ private:
     std::shared_ptr<database::LidarFrame> m_current_frame;  ///< Current LiDAR frame
     std::vector<Matrix4f> m_trajectory;                     ///< Estimated camera trajectory
     
+    // ===== Keyframe Data =====
+    struct KeyframeData {
+        Matrix4f pose;      ///< Keyframe pose in world coordinates
+        int id;             ///< Keyframe ID
+    };
+    std::vector<KeyframeData> m_keyframes;                  ///< Keyframe poses and IDs
+    
     // ===== New Visualization Data =====
     PointCloudConstPtr m_map_cloud;                        ///< Map points (world coordinate) - Gray
     PointCloudConstPtr m_pre_icp_cloud;                    ///< Pre-ICP lidar features (world) - Blue  
     PointCloudConstPtr m_post_icp_cloud;                   ///< Post-ICP lidar features (world) - Red
+    PointCloudConstPtr m_last_keyframe_map;                ///< Last keyframe local map (world) - Large points
     
     // ===== Thread Safety =====
     mutable std::mutex m_data_mutex;
@@ -174,10 +200,11 @@ private:
     
     // ===== UI Variables =====
     pangolin::Var<bool> m_auto_mode;                   ///< Auto mode checkbox
-    pangolin::Var<bool> m_show_map_points;             ///< Show map points checkbox (Gray)
     pangolin::Var<bool> m_show_point_cloud;            ///< Show LiDAR point cloud (Red-Blue)
     pangolin::Var<bool> m_show_features;               ///< Show LiDAR features (Mint)
     pangolin::Var<bool> m_show_trajectory;             ///< Show estimated trajectory checkbox
+    pangolin::Var<bool> m_show_keyframes;              ///< Show keyframes checkbox
+    pangolin::Var<bool> m_show_keyframe_map;           ///< Show last keyframe map checkbox
     pangolin::Var<bool> m_show_coordinate_frame;       ///< Show coordinate frame checkbox
     pangolin::Var<bool> m_top_view_follow;             ///< Top-down view follow mode checkbox
     pangolin::Var<bool> m_step_forward_button;         ///< Step forward button
@@ -261,6 +288,16 @@ private:
      * @param trajectory Vector of poses forming the trajectory
      */
     void draw_trajectory_with_data(const std::vector<Matrix4f>& trajectory);
+    
+    /**
+     * @brief Draw keyframes as coordinate axes
+     */
+    void draw_keyframes();
+    
+    /**
+     * @brief Draw last keyframe map points as large points
+     */
+    void draw_last_keyframe_map();
     
     /**
      * @brief Draw current pose

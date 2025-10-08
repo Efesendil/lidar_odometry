@@ -188,6 +188,19 @@ public:
      */
     PointCloudPtr get_world_cloud() const;
     
+    /**
+     * @brief Set local map for keyframe (features within local region at keyframe creation time)
+     * @param local_map Local map point cloud in world coordinates
+     */
+    void set_local_map(const PointCloudPtr& local_map);
+    
+    /**
+     * @brief Get local map for keyframe
+     * @return Shared pointer to local map point cloud
+     */
+    PointCloudPtr get_local_map() { return m_local_map; }
+    PointCloudConstPtr get_local_map() const { return m_local_map; }
+    
     // ===== KdTree Management =====
     
     /**
@@ -200,6 +213,17 @@ public:
      * @return Shared pointer to KdTree (builds if not exists)
      */
     KdTreePtr get_kdtree();
+    
+    /**
+     * @brief Build KdTree for local map (for keyframes)
+     */
+    void build_local_map_kdtree();
+    
+    /**
+     * @brief Get KdTree for local map
+     * @return Shared pointer to local map KdTree
+     */
+    KdTreePtr get_local_map_kdtree();
     
     // ===== Feature Management =====
     
@@ -289,10 +313,13 @@ private:
     PointCloudPtr m_processed_cloud;   // Processed point cloud (filtered/downsampled)
     PointCloudPtr m_feature_cloud;     // Feature point cloud
     PointCloudPtr m_feature_cloud_global;       // Cached world coordinate cloud (lazy evaluation)
+    PointCloudPtr m_local_map;         // Local map at keyframe creation time (world coordinates)
     
     // ===== Search Structure =====
     KdTreePtr m_kdtree;                // KdTree for nearest neighbor search
     bool m_kdtree_built;               // Flag to track KdTree status
+    KdTreePtr m_local_map_kdtree;      // KdTree for local map (keyframes)
+    bool m_local_map_kdtree_built;     // Flag to track local map KdTree status
     
     // ===== Feature Data =====
     CorrespondenceVector m_correspondences; // Point correspondences for ICP

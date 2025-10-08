@@ -38,6 +38,7 @@ struct SystemConfig {
     float collinearity_threshold = 0.05f;           ///< Collinearity threshold
     float max_neighbor_distance = 1.0f;             ///< Maximum neighbor search distance
     float feature_quality_threshold = 0.1f;         ///< Minimum quality for valid features
+    float feature_voxel_size = 0.1f;                ///< Voxel size for feature extraction
     
     // ===== Odometry =====
     size_t max_iterations = 20;                     ///< Maximum optimization iterations
@@ -59,7 +60,7 @@ struct SystemConfig {
     // ===== Robust estimation =====
     bool use_adaptive_m_estimator = true;           ///< Enable adaptive M-estimator
     std::string loss_type = "huber";                ///< Loss function type
-    std::string scale_method = "MAD";               ///< Scale factor calculation method ("MAD", "fixed", "std")
+    std::string scale_method = "PKO";               ///< Scale factor calculation method ("MAD", "fixed", "std")
     double fixed_scale_factor = 1.0;               ///< Fixed scale factor when scale_method is "fixed"
     double mad_multiplier = 1.4826;                ///< MAD to standard deviation conversion
     double min_scale_factor = 0.01;                ///< Minimum scale factor (also PKO alpha lower bound)
