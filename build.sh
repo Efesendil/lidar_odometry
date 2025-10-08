@@ -103,7 +103,7 @@ fi
 cd build
 
 # Configure and build main project
-cmake ../src
+cmake ..
 make -j$NPROC
 
 echo ""
@@ -113,5 +113,10 @@ echo "=============================================="
 echo ""
 echo "To run the LiDAR odometry system:"
 echo "  cd build"
-echo "  ./lidar_odometry ../config/kitti.yaml"
+echo ""
+echo "For KITTI dataset:"
+echo "  ./kitti_lidar_odometry ../config/kitti.yaml"
+echo ""
+echo "For MID360 LiDAR:"
+echo "  ./mid360_lidar_odometry ../config/mid360.yaml"
 echo ""
