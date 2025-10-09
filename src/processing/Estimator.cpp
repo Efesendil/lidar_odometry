@@ -368,7 +368,7 @@ void Estimator::create_keyframe(std::shared_ptr<database::LidarFrame> frame)
     frame->build_local_map_kdtree();
     
     // Update global feature map
-    m_feature_map = processed_feature_map;
+    m_feature_map = filtered_feature_map;
     
     // Update last keyframe reference for optimization
     m_last_keyframe = frame;
