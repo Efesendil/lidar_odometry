@@ -86,6 +86,7 @@ set(LIDAR_ODOMETRY_SOURCES
     processing/FeatureExtractor.cpp
     processing/Estimator.cpp
     processing/DualFrameICPOptimizer.cpp
+    processing/LoopClosureDetector.cpp
     
     # Optimization module
     optimization/Parameters.cpp

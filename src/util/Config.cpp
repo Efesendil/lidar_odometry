@@ -305,6 +305,24 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         if (config_map.find("player.auto_ground_truth_path") != config_map.end()) {
             m_config.player_auto_ground_truth_path = (config_map["player.auto_ground_truth_path"] == "true");
         }
+        
+        // Loop closure detection settings
+        if (config_map.find("loop_detector.enable_loop_detection") != config_map.end()) {
+            m_config.loop_enable_loop_detection = (config_map["loop_detector.enable_loop_detection"] == "true");
+        }
+        if (config_map.find("loop_detector.similarity_threshold") != config_map.end()) {
+            m_config.loop_similarity_threshold = std::stof(config_map["loop_detector.similarity_threshold"]);
+        }
+        if (config_map.find("loop_detector.min_keyframe_gap") != config_map.end()) {
+            m_config.loop_min_keyframe_gap = std::stoi(config_map["loop_detector.min_keyframe_gap"]);
+        }
+        if (config_map.find("loop_detector.max_search_distance") != config_map.end()) {
+            m_config.loop_max_search_distance = std::stof(config_map["loop_detector.max_search_distance"]);
+        }
+        if (config_map.find("loop_detector.enable_debug_output") != config_map.end()) {
+            m_config.loop_enable_debug_output = (config_map["loop_detector.enable_debug_output"] == "true");
+        }
+        
         return true;
         
     } catch (const std::exception& e) {

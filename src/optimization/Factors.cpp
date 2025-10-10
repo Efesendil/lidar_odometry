@@ -274,5 +274,210 @@ Eigen::Matrix3d PointToPlaneFactorDualFrame::skew_symmetric(const Eigen::Vector3
     return S;
 }
 
+// RelativePoseFactor implementation
+RelativePoseFactor::RelativePoseFactor(const Sophus::SE3d& relative_measurement,
+                                       const Eigen::Matrix<double, 6, 6>& information_matrix)
+    : m_relative_measurement(relative_measurement)
+    , m_information_matrix(information_matrix)
+    , m_robust_weight(1.0)
+    , m_is_outlier(false) {
+}
+
+RelativePoseFactor::RelativePoseFactor(const Sophus::SE3d& relative_measurement,
+                                       double translation_weight,
+                                       double rotation_weight)
+    : m_relative_measurement(relative_measurement)
+    , m_robust_weight(1.0)
+    , m_is_outlier(false) {
+    
+    // Create diagonal information matrix with specified weights
+    m_information_matrix = Eigen::Matrix<double, 6, 6>::Identity();
+    m_information_matrix.block<3, 3>(0, 0) *= translation_weight;  // Translation weights
+    m_information_matrix.block<3, 3>(3, 3) *= rotation_weight;     // Rotation weights
+}
+
+bool RelativePoseFactor::Evaluate(double const* const* parameters,
+                                 double* residuals,
+                                 double** jacobians) const {
+    
+    // If marked as outlier, return large residual with zero jacobians
+    if (m_is_outlier) {
+        Eigen::Map<Eigen::Matrix<double, 6, 1>> residual_map(residuals);
+        residual_map.setConstant(100.0); // Large residual to indicate outlier
+        
+        if (jacobians) {
+            if (jacobians[0]) {
+                Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> jac_i(jacobians[0]);
+                jac_i.setZero();
+            }
+            if (jacobians[1]) {
+                Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> jac_j(jacobians[1]);
+                jac_j.setZero();
+            }
+        }
+        return true;
+    }
+
+    try {
+        // Extract SE3 parameters from tangent space (Ceres order: tx,ty,tz,rx,ry,rz)
+        Eigen::Map<const Eigen::Matrix<double, 6, 1>> se3_tangent_i(parameters[0]);
+        Eigen::Map<const Eigen::Matrix<double, 6, 1>> se3_tangent_j(parameters[1]);
+        
+        // Convert tangent space to SE3 using Sophus exp
+        Sophus::SE3d T_i = Sophus::SE3d::exp(se3_tangent_i);
+        Sophus::SE3d T_j = Sophus::SE3d::exp(se3_tangent_j);
+        
+        // Compute relative transformation
+        Sophus::SE3d T_rel = T_i.inverse() * T_j;
+        
+        // Compute error in SE3 tangent space
+        // error = log(T_ij^(-1) * T_rel)
+        Sophus::SE3d error_se3 = m_relative_measurement.inverse() * T_rel;
+        Eigen::Matrix<double, 6, 1> error_tangent = error_se3.log();
+        
+        // Apply information matrix weighting
+        Eigen::Matrix<double, 6, 1> weighted_error = m_information_matrix * error_tangent;
+        
+        // Apply robust weight
+        weighted_error *= m_robust_weight;
+        
+        // Set residuals
+        Eigen::Map<Eigen::Matrix<double, 6, 1>> residual_map(residuals);
+        residual_map = weighted_error;
+        
+        // Compute Jacobians if requested
+        if (jacobians) {
+            // For SE3 pose graph optimization, we need to compute:
+            // d(residual)/d(pose_i) and d(residual)/d(pose_j)
+            
+            // Right Jacobian matrices for SE3 
+            Eigen::Matrix<double, 6, 6> Jr_inv = right_jacobian_inverse(error_tangent);
+            
+            if (jacobians[0]) {
+                // Jacobian w.r.t. pose i
+                // d(error)/d(pose_i) = -Jr_inv * Ad(T_j^(-1))
+                Eigen::Matrix<double, 6, 6> Ad_T_j_inv;
+                Sophus::SE3d T_j_inv = T_j.inverse();
+                Ad_T_j_inv.block<3, 3>(0, 0) = T_j_inv.rotationMatrix();
+                Ad_T_j_inv.block<3, 3>(0, 3) = skew_symmetric(T_j_inv.translation()) * T_j_inv.rotationMatrix();
+                Ad_T_j_inv.block<3, 3>(3, 0) = Eigen::Matrix3d::Zero();
+                Ad_T_j_inv.block<3, 3>(3, 3) = T_j_inv.rotationMatrix();
+                
+                Eigen::Matrix<double, 6, 6> jac_i = -Jr_inv * Ad_T_j_inv;
+                jac_i = m_information_matrix * jac_i * m_robust_weight;
+                
+                Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> jac_i_map(jacobians[0]);
+                jac_i_map = jac_i;
+            }
+            
+            if (jacobians[1]) {
+                // Jacobian w.r.t. pose j
+                // d(error)/d(pose_j) = Jr_inv
+                Eigen::Matrix<double, 6, 6> jac_j = Jr_inv;
+                jac_j = m_information_matrix * jac_j * m_robust_weight;
+                
+                Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> jac_j_map(jacobians[1]);
+                jac_j_map = jac_j;
+            }
+        }
+        
+        return true;
+        
+    } catch (const std::exception& e) {
+        spdlog::warn("[RelativePoseFactor] Exception in Evaluate: {}", e.what());
+        return false;
+    }
+}
+
+void RelativePoseFactor::compute_raw_residual(double const* const* parameters, 
+                                              double* residuals) const {
+    // Extract SE3 parameters from tangent space
+    Eigen::Map<const Eigen::Matrix<double, 6, 1>> se3_tangent_i(parameters[0]);
+    Eigen::Map<const Eigen::Matrix<double, 6, 1>> se3_tangent_j(parameters[1]);
+    
+    // Convert tangent space to SE3 using Sophus exp
+    Sophus::SE3d T_i = Sophus::SE3d::exp(se3_tangent_i);
+    Sophus::SE3d T_j = Sophus::SE3d::exp(se3_tangent_j);
+    
+    // Compute relative transformation
+    Sophus::SE3d T_rel = T_i.inverse() * T_j;
+    
+    // Compute error in SE3 tangent space
+    Sophus::SE3d error_se3 = m_relative_measurement.inverse() * T_rel;
+    Eigen::Matrix<double, 6, 1> error_tangent = error_se3.log();
+    
+    // Set residuals (no weighting for raw residual)
+    Eigen::Map<Eigen::Matrix<double, 6, 1>> residual_map(residuals);
+    residual_map = error_tangent;
+}
+
+Eigen::Matrix3d RelativePoseFactor::skew_symmetric(const Eigen::Vector3d& v) const {
+    Eigen::Matrix3d S;
+    S <<     0, -v.z(),  v.y(),
+         v.z(),     0, -v.x(),
+        -v.y(),  v.x(),     0;
+    return S;
+}
+
+Eigen::Matrix<double, 6, 6> RelativePoseFactor::right_jacobian(const Eigen::Matrix<double, 6, 1>& xi) const {
+    // Extract translation and rotation parts
+    Eigen::Vector3d rho = xi.head<3>();  // translation
+    Eigen::Vector3d phi = xi.tail<3>();  // rotation
+    
+    double phi_norm = phi.norm();
+    
+    // Initialize as identity
+    Eigen::Matrix<double, 6, 6> Jr = Eigen::Matrix<double, 6, 6>::Identity();
+    
+    if (phi_norm < 1e-6) {
+        // Small angle approximation
+        return Jr;
+    }
+    
+    // For simplicity, use the approximation: Jr ≈ I + 0.5 * adjoint
+    Eigen::Matrix3d phi_skew = skew_symmetric(phi);
+    Eigen::Matrix3d rho_skew = skew_symmetric(rho);
+    
+    // Build adjoint matrix
+    Eigen::Matrix<double, 6, 6> adjoint = Eigen::Matrix<double, 6, 6>::Zero();
+    adjoint.block<3, 3>(0, 0) = rho_skew;
+    adjoint.block<3, 3>(0, 3) = phi_skew;
+    adjoint.block<3, 3>(3, 3) = phi_skew;
+    
+    Jr += 0.5 * adjoint;
+    
+    return Jr;
+}
+
+Eigen::Matrix<double, 6, 6> RelativePoseFactor::right_jacobian_inverse(const Eigen::Matrix<double, 6, 1>& xi) const {
+    // Extract translation and rotation parts
+    Eigen::Vector3d rho = xi.head<3>();  // translation
+    Eigen::Vector3d phi = xi.tail<3>();  // rotation
+    
+    double phi_norm = phi.norm();
+    
+    // Initialize as identity
+    Eigen::Matrix<double, 6, 6> Jr_inv = Eigen::Matrix<double, 6, 6>::Identity();
+    
+    if (phi_norm < 1e-6) {
+        // Small angle approximation
+        return Jr_inv;
+    }
+    
+    // For simplicity, use the approximation: Jr^(-1) ≈ I - 0.5 * adjoint
+    Eigen::Matrix3d phi_skew = skew_symmetric(phi);
+    Eigen::Matrix3d rho_skew = skew_symmetric(rho);
+    
+    // Build adjoint matrix
+    Eigen::Matrix<double, 6, 6> adjoint = Eigen::Matrix<double, 6, 6>::Zero();
+    adjoint.block<3, 3>(0, 0) = rho_skew;
+    adjoint.block<3, 3>(0, 3) = phi_skew;
+    adjoint.block<3, 3>(3, 3) = phi_skew;
+    
+    Jr_inv -= 0.5 * adjoint;
+    
+    return Jr_inv;
+}
+
 } // namespace optimization
 } // namespace lidar_odometry

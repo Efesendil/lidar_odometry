@@ -84,6 +84,8 @@ public:
     
     // ===== Basic Getters =====
     int get_frame_id() const { return m_frame_id; }
+    int get_keyframe_id() const { return m_keyframe_id; }
+    bool is_keyframe() const { return m_keyframe_id >= 0; }
     double get_timestamp() const { return m_timestamp; }
     
     // ===== Pose Management =====
@@ -220,6 +222,11 @@ public:
     void build_local_map_kdtree();
     
     /**
+     * @brief Clear KdTree for local map to save memory
+     */
+    void clear_local_map_kdtree();
+    
+    /**
      * @brief Get KdTree for local map
      * @return Shared pointer to local map KdTree
      */
@@ -259,16 +266,19 @@ public:
     bool is_fixed() const { return m_is_fixed; }
     
     /**
-     * @brief Set keyframe status
-     * @param is_keyframe True if this frame is a keyframe
+     * @brief Set keyframe ID and status
+     * @param keyframe_id Keyframe identifier (-1 if not a keyframe)
      */
-    void set_keyframe(bool is_keyframe) { m_is_keyframe = is_keyframe; }
+    void set_keyframe_id(int keyframe_id) { m_keyframe_id = keyframe_id; }
     
     /**
-     * @brief Check if frame is a keyframe
-     * @return True if this is a keyframe
+     * @brief Set keyframe status (deprecated - use set_keyframe_id instead)
+     * @param is_keyframe True if this frame is a keyframe
      */
-    bool is_keyframe() const { return m_is_keyframe; }
+    void set_keyframe(bool is_keyframe) { 
+        // For backward compatibility, assign next available ID or -1
+        m_keyframe_id = is_keyframe ? 0 : -1; // This should be properly managed by Estimator
+    }
     
     // ===== Statistics =====
     
@@ -300,6 +310,7 @@ public:
 private:
     // ===== Core Frame Data =====
     int m_frame_id;                    // Unique frame identifier
+    int m_keyframe_id;                 // Keyframe identifier (-1 if not a keyframe)
     double m_timestamp;                // Frame timestamp
     
     // ===== Pose Data =====
@@ -326,7 +337,6 @@ private:
     
     // ===== Status Flags =====
     bool m_is_fixed;                   // True if pose should not be optimized
-    bool m_is_keyframe;                // True if this is a keyframe
     bool m_has_ground_truth;           // True if ground truth pose is available
 };
 

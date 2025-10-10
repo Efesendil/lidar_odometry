@@ -26,6 +26,7 @@ find_package(Eigen3 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Threads REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # Build third-party dependencies from source
 set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
@@ -65,6 +66,8 @@ include_directories(
     ${THIRDPARTY_DIR}/ceres-solver/include
     ${CMAKE_BINARY_DIR}/thirdparty/ceres-solver/include
     ${THIRDPARTY_DIR}/nanoflann/include
+    ${THIRDPARTY_DIR}/LidarIris
+    ${OpenCV_INCLUDE_DIRS}
 )
 
 # Common source files for all executables
@@ -76,6 +79,11 @@ set(COMMON_SOURCES
     src/processing/FeatureExtractor.cpp
     src/processing/Estimator.cpp
     src/processing/DualFrameICPOptimizer.cpp
+    src/processing/LoopClosureDetector.cpp
+    
+    # Third-party
+    thirdparty/LidarIris/LidarIris.cpp
+    thirdparty/LidarIris/fftm/fftm.cpp
     
     # Optimization module
     src/optimization/Parameters.cpp
@@ -130,6 +138,7 @@ target_link_libraries(kitti_lidar_odometry
     pango_opengl
     pango_core
     pango_image
+    ${OpenCV_LIBS}
     m  # Math library for M_PI
     stdc++fs  # For std::filesystem
 )
@@ -145,6 +154,7 @@ target_link_libraries(mid360_lidar_odometry
     pango_opengl
     pango_core
     pango_image
+    ${OpenCV_LIBS}
     m  # Math library for M_PI
     stdc++fs  # For std::filesystem
 )

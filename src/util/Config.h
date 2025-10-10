@@ -110,6 +110,15 @@ struct SystemConfig {
     bool player_step_mode = false;                  ///< Step-by-step processing mode
     bool player_auto_ground_truth_path = true;      ///< Auto construct GT path from sequence
     
+    // ===== Loop closure detection =====
+    bool loop_enable_loop_detection = true;         ///< Enable loop closure detection
+    float loop_similarity_threshold = 0.3f;         ///< LiDAR Iris similarity threshold (lower is more similar)
+    int loop_min_keyframe_gap = 50;                 ///< Minimum keyframe ID difference for loop detection
+    float loop_max_search_distance = 10.0f;         ///< Maximum distance (meters) to search for loop candidates
+    bool loop_enable_debug_output = false;          ///< Enable detailed debug logging
+    
+    // Note: Iris parameters will be automatically calculated from max_range
+    
     SystemConfig() = default;
 };
 

@@ -231,5 +231,124 @@ private:
     bool m_is_outlier;                   // Outlier flag to disable optimization
 };
 
+/**
+ * @brief Relative Pose Factor for Pose Graph Optimization
+ * 
+ * This factor implements relative pose constraints between two poses in pose graph:
+ * residual = log(T_ij^(-1) * T_i^(-1) * T_j)
+ * 
+ * where:
+ * - T_i: SE3 transformation of pose i
+ * - T_j: SE3 transformation of pose j  
+ * - T_ij: Measured relative transformation from pose i to pose j
+ * 
+ * Parameters: Two SE3 pose parameters in tangent space [6] each
+ * Residual dimension: [6] (SE3 tangent space)
+ * 
+ * This factor is used for:
+ * - Sequential odometry constraints
+ * - Loop closure constraints
+ * - GPS or other absolute pose measurements
+ */
+class RelativePoseFactor : public ceres::SizedCostFunction<6, 6, 6> {
+public:
+    /**
+     * @brief Constructor
+     * @param relative_measurement Measured relative transformation T_ij from pose i to pose j
+     * @param information_matrix 6x6 information matrix (inverse of covariance)
+     */
+    RelativePoseFactor(const Sophus::SE3d& relative_measurement,
+                       const Eigen::Matrix<double, 6, 6>& information_matrix);
+
+    /**
+     * @brief Constructor with simplified information matrix
+     * @param relative_measurement Measured relative transformation T_ij from pose i to pose j
+     * @param translation_weight Weight for translation components (x, y, z)
+     * @param rotation_weight Weight for rotation components (rx, ry, rz)
+     */
+    RelativePoseFactor(const Sophus::SE3d& relative_measurement,
+                       double translation_weight = 1.0,
+                       double rotation_weight = 1.0);
+
+    /**
+     * @brief Set outlier flag to disable optimization for this factor
+     * @param is_outlier If true, this factor will not contribute to optimization
+     */
+    void set_outlier(bool is_outlier) { m_is_outlier = is_outlier; }
+    
+    /**
+     * @brief Get outlier flag
+     * @return true if this factor is marked as outlier
+     */
+    bool is_outlier() const { return m_is_outlier; }
+
+    /**
+     * @brief Set robust weight for this factor
+     * @param weight Robust weight computed from loss function
+     */
+    void set_robust_weight(double weight) { m_robust_weight = weight; }
+
+    /**
+     * @brief Get current robust weight
+     * @return Current robust weight
+     */
+    double get_robust_weight() const { return m_robust_weight; }
+
+    /**
+     * @brief Evaluate residual and Jacobian
+     * @param parameters SE3 pose parameters [pose_i, pose_j] in tangent space [tx,ty,tz,rx,ry,rz]
+     * @param residuals Output residual [6] in SE3 tangent space
+     * @param jacobians Output Jacobian matrices [6x6, 6x6] if not nullptr
+     * @return true if evaluation successful
+     */
+    virtual bool Evaluate(double const* const* parameters,
+                         double* residuals,
+                         double** jacobians) const override;
+
+    /**
+     * @brief Compute raw residual without weighting (for robust estimation)
+     * @param parameters SE3 pose parameters [pose_i, pose_j] in tangent space
+     * @param residuals Output residual [6] in SE3 tangent space
+     */
+    void compute_raw_residual(double const* const* parameters, double* residuals) const;
+
+    /**
+     * @brief Get measured relative transformation
+     */
+    const Sophus::SE3d& get_relative_measurement() const { return m_relative_measurement; }
+
+    /**
+     * @brief Get information matrix
+     */
+    const Eigen::Matrix<double, 6, 6>& get_information_matrix() const { return m_information_matrix; }
+
+private:
+    /**
+     * @brief Create skew-symmetric matrix from 3D vector
+     * @param v Input 3D vector
+     * @return 3x3 skew-symmetric matrix [v]_x
+     */
+    Eigen::Matrix3d skew_symmetric(const Eigen::Vector3d& v) const;
+
+    /**
+     * @brief Compute right Jacobian for SE(3)
+     * @param xi 6D tangent space vector
+     * @return 6x6 right Jacobian matrix
+     */
+    Eigen::Matrix<double, 6, 6> right_jacobian(const Eigen::Matrix<double, 6, 1>& xi) const;
+
+    /**
+     * @brief Compute inverse right Jacobian for SE(3)
+     * @param xi 6D tangent space vector
+     * @return 6x6 inverse right Jacobian matrix
+     */
+    Eigen::Matrix<double, 6, 6> right_jacobian_inverse(const Eigen::Matrix<double, 6, 1>& xi) const;
+
+    Sophus::SE3d m_relative_measurement;                // Measured relative transformation T_ij
+    Eigen::Matrix<double, 6, 6> m_information_matrix;  // Information matrix (6x6)
+    double m_robust_weight;                             // Robust weight for outlier handling
+    bool m_is_outlier;                                  // Outlier flag to disable optimization
+};
+
 } // namespace optimization
 } // namespace lidar_odometry

@@ -19,6 +19,8 @@
 #include "../optimization/Parameters.h"
 #include "../optimization/AdaptiveMEstimator.h"
 #include "DualFrameICPOptimizer.h"
+#include "LoopClosureDetector.h"
+#include "../util/MathUtils.h"
 
 #include <ceres/ceres.h>
 #include <sophus/se3.hpp>
@@ -121,6 +123,24 @@ public:
      * @return Keyframe at the given index, nullptr if index out of bounds
      */
     std::shared_ptr<database::LidarFrame> get_keyframe(size_t index) const;
+    
+    /**
+     * @brief Enable/disable loop closure detection
+     * @param enable Enable loop closure detection
+     */
+    void enable_loop_closure(bool enable);
+    
+    /**
+     * @brief Set loop closure detection configuration
+     * @param config Loop closure configuration
+     */
+    void set_loop_closure_config(const LoopClosureConfig& config);
+    
+    /**
+     * @brief Get loop closure detection statistics
+     * @return Number of loop closures detected
+     */
+    size_t get_loop_closure_count() const;
 
 private:
     // ===== Internal Processing =====
@@ -170,6 +190,25 @@ private:
      */
     void create_keyframe(std::shared_ptr<database::LidarFrame> frame);
     
+    /**
+     * @brief Process loop closure candidates and compute relative poses
+     * @param current_keyframe Current keyframe
+     * @param loop_candidates List of loop closure candidates
+     */
+    void process_loop_closures(std::shared_ptr<database::LidarFrame> current_keyframe, 
+                              const std::vector<LoopCandidate>& loop_candidates);
+    
+    /**
+     * @brief Apply loop closure correction immediately
+     * @param current_keyframe Current keyframe to correct
+     * @param matched_keyframe Matched (old) keyframe
+     * @param T_current_matched Relative transformation from current to matched keyframe
+     */
+    void apply_loop_closure_correction(std::shared_ptr<database::LidarFrame> current_keyframe,
+                                      std::shared_ptr<database::LidarFrame> matched_keyframe,
+                                      const SE3f& T_current_matched);
+    
+    
 
 private:
     // Configuration
@@ -180,6 +219,7 @@ private:
     SE3f m_T_wl_current;
     SE3f m_velocity;  // Velocity model: T_current = T_previous * m_velocity
     std::vector<SE3f> m_trajectory;
+    int m_next_keyframe_id;  // Next keyframe ID to assign
     
     // Frames and features
     std::shared_ptr<database::LidarFrame> m_previous_frame;
@@ -197,6 +237,10 @@ private:
     std::unique_ptr<util::VoxelGrid> m_voxel_filter;
     std::unique_ptr<FeatureExtractor> m_feature_extractor;
     std::shared_ptr<optimization::AdaptiveMEstimator> m_adaptive_estimator;
+    
+    // Loop closure detection
+    std::unique_ptr<LoopClosureDetector> m_loop_detector;
+    int m_last_successful_loop_keyframe_id;  // Last keyframe ID where loop closure succeeded
     
     // Last keyframe for optimization
     std::shared_ptr<database::LidarFrame> m_last_keyframe;

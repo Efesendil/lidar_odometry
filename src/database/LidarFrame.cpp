@@ -20,6 +20,7 @@ LidarFrame::LidarFrame(int frame_id,
                        double timestamp,
                        const PointCloudPtr& raw_cloud)
     : m_frame_id(frame_id)
+    , m_keyframe_id(-1)  // Initialize as not a keyframe
     , m_timestamp(timestamp)
     , m_pose(SE3f())
     , m_relative_pose(SE3f())
@@ -33,7 +34,6 @@ LidarFrame::LidarFrame(int frame_id,
     , m_local_map_kdtree(nullptr)
     , m_local_map_kdtree_built(false)
     , m_is_fixed(false)
-    , m_is_keyframe(false)
     , m_has_ground_truth(false) {
     
     if (!m_raw_cloud) {
@@ -226,6 +226,14 @@ void LidarFrame::build_local_map_kdtree() {
     
     spdlog::debug("[LidarFrame] Built KdTree for local map with {} points in frame {}", 
                   m_local_map->size(), m_frame_id);
+}
+
+void LidarFrame::clear_local_map_kdtree() {
+    if (m_local_map_kdtree) {
+        m_local_map_kdtree.reset();
+        m_local_map_kdtree_built = false;
+        spdlog::debug("[LidarFrame] Cleared KdTree for frame {}", m_frame_id);
+    }
 }
 
 KdTreePtr LidarFrame::get_local_map_kdtree() {
