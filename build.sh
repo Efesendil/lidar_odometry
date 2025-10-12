@@ -103,7 +103,7 @@ fi
 cd build
 
 # Configure and build main project
-cmake ../src
+cmake ..
 make -j$NPROC
 
 echo ""
