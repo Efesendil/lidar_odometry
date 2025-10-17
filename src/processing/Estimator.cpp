@@ -36,8 +36,8 @@ Estimator::Estimator(const util::SystemConfig& config)
     , m_total_optimization_time_ms(0.0)
     , m_optimization_call_count(0)
 {
-    // Initialize pose graph optimizer
-    m_pose_graph_optimizer = std::make_shared<optimization::PoseGraphOptimizer>();
+    // Initialize GTSAM pose graph optimizer
+    m_pose_graph_optimizer = std::make_shared<optimization::PoseGraphOptimizerGTSAM>();
     
     // Create AdaptiveMEstimator with PKO configuration only
     m_adaptive_estimator = std::make_shared<optimization::AdaptiveMEstimator>(
@@ -700,11 +700,13 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
         m_pose_graph_optimizer->add_loop_closure_constraint(
             matched_keyframe->get_keyframe_id(),  // from (older keyframe)
             current_keyframe->get_keyframe_id(),  // to (current keyframe)
-            T_matched_to_current  // relative pose from matched to current
+            T_matched_to_current,  // relative pose from matched to current
+            0.01,  // translation noise (tight constraint for loop)
+            0.01   // rotation noise
         );
         
-        // Perform pose graph optimization
-        spdlog::info("[Estimator] Running pose graph optimization...");
+        // Perform pose graph optimization with GTSAM
+        spdlog::info("[Estimator] Running GTSAM pose graph optimization...");
         bool opt_success = m_pose_graph_optimizer->optimize();
         
         if (opt_success) {
