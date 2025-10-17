@@ -2,7 +2,7 @@
 data_directory: "/home/eugene/data/KITTI/Velodyne"
 ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
 output_directory: "/home/eugene/data/KITTI/Result"
-seq: "07"
+seq: "05"
 
 # Player settings
 player:
@@ -52,11 +52,11 @@ multi_frame:
 # Robust estimation settings
 robust_estimation:
   use_adaptive_m_estimator: true
-  min_scale_factor: 0.1              # PKO alpha lower bound
+  min_scale_factor: 0.001              # PKO alpha lower bound
   max_scale_factor: 10.0             # PKO alpha upper bound
   
   # PKO (Probabilistic Kernel Optimization) parameters
-  num_alpha_segments: 100
+  num_alpha_segments: 1000
   truncated_threshold: 10.0
   gmm_components: 3
   gmm_sample_size: 100               # 10% of typical data size

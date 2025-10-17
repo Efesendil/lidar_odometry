@@ -160,6 +160,8 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         }
         if (config_map.find("robust_estimation.min_scale_factor") != config_map.end()) {
             m_config.min_scale_factor = std::stod(config_map["robust_estimation.min_scale_factor"]);
+
+            std::cout<<"[ConfigManager] Set min_scale_factor to " << m_config.min_scale_factor << std::endl;
         }
         if (config_map.find("robust_estimation.max_scale_factor") != config_map.end()) {
             m_config.max_scale_factor = std::stod(config_map["robust_estimation.max_scale_factor"]);

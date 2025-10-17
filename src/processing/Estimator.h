@@ -18,6 +18,7 @@
 #include "../optimization/Factors.h"
 #include "../optimization/Parameters.h"
 #include "../optimization/AdaptiveMEstimator.h"
+#include "../optimization/PoseGraphOptimizer.h"
 #include "DualFrameICPOptimizer.h"
 #include "LoopClosureDetector.h"
 #include "../util/MathUtils.h"
@@ -141,6 +142,12 @@ public:
      * @return Number of loop closures detected
      */
     size_t get_loop_closure_count() const;
+    
+    /**
+     * @brief Get optimized trajectory from pose graph optimization (for debugging)
+     * @return Map of keyframe ID to optimized pose (as Eigen::Matrix4f)
+     */
+    std::map<int, Eigen::Matrix4f> get_optimized_trajectory() const;
 
 private:
     // ===== Internal Processing =====
@@ -204,9 +211,13 @@ private:
      * @param matched_keyframe Matched (old) keyframe
      * @param T_current_matched Relative transformation from current to matched keyframe
      */
-    void apply_loop_closure_correction(std::shared_ptr<database::LidarFrame> current_keyframe,
-                                      std::shared_ptr<database::LidarFrame> matched_keyframe,
-                                      const SE3f& T_current_matched);
+    void apply_loop_closure_correction(std::shared_ptr<database::LidarFrame> current_keyframe, const SE3f& T_current_old_to_new);
+
+    /**
+     * @brief Apply pose graph optimization results to all keyframes
+     */
+    void apply_pose_graph_optimization();
+
     
     
 
@@ -238,9 +249,11 @@ private:
     std::unique_ptr<FeatureExtractor> m_feature_extractor;
     std::shared_ptr<optimization::AdaptiveMEstimator> m_adaptive_estimator;
     
-    // Loop closure detection
+    // Loop closure detection and pose graph optimization
     std::unique_ptr<LoopClosureDetector> m_loop_detector;
+    std::shared_ptr<optimization::PoseGraphOptimizer> m_pose_graph_optimizer;
     int m_last_successful_loop_keyframe_id;  // Last keyframe ID where loop closure succeeded
+    std::map<int, SE3f> m_optimized_poses;  // Optimized poses from PGO (for debugging visualization)
     
     // Last keyframe for optimization
     std::shared_ptr<database::LidarFrame> m_last_keyframe;

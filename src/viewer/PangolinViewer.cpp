@@ -204,6 +204,7 @@ void PangolinViewer::render_loop() {
         // Copy data once with single lock to avoid multiple locks during rendering
         std::shared_ptr<database::LidarFrame> current_frame;
         std::vector<Matrix4f> trajectory_copy;
+        std::vector<Matrix4f> optimized_trajectory_copy;
         PointCloudConstPtr map_cloud_copy;
         PointCloudConstPtr pre_icp_cloud_copy;
         PointCloudConstPtr post_icp_cloud_copy;
@@ -214,6 +215,7 @@ void PangolinViewer::render_loop() {
             std::lock_guard<std::mutex> lock(m_data_mutex);
             current_frame = m_current_frame;
             trajectory_copy = m_trajectory;
+            optimized_trajectory_copy = m_optimized_trajectory;
             map_cloud_copy = m_map_cloud;
             pre_icp_cloud_copy = m_pre_icp_cloud;
             post_icp_cloud_copy = m_post_icp_cloud;
@@ -276,6 +278,21 @@ void PangolinViewer::render_loop() {
         // Draw trajectory - using local copy
         if (m_show_trajectory.Get() && trajectory_copy.size() > 1) {
             draw_trajectory_with_data(trajectory_copy);
+        }
+        
+        // Draw optimized trajectory (PGO debug) - GREEN and THICK
+        if (optimized_trajectory_copy.size() > 1) {
+            glLineWidth(m_trajectory_width * 2.0f);  // Thicker line
+            glColor3f(0.0f, 1.0f, 0.0f);  // Bright green
+            
+            glBegin(GL_LINE_STRIP);
+            for (const auto& pose : optimized_trajectory_copy) {
+                Vector3f position = pose.block<3, 1>(0, 3);
+                glVertex3f(position.x(), position.y(), position.z());
+            }
+            glEnd();
+            
+            glLineWidth(1.0f);
         }
 
         // Draw keyframes
@@ -416,6 +433,16 @@ void PangolinViewer::update_icp_debug_clouds(PointCloudConstPtr pre_icp_cloud,
 void PangolinViewer::add_trajectory_pose(const Matrix4f& pose) {
     std::lock_guard<std::mutex> lock(m_data_mutex);
     m_trajectory.push_back(pose);
+}
+
+void PangolinViewer::update_optimized_trajectory(const std::map<int, Matrix4f>& optimized_poses) {
+    std::lock_guard<std::mutex> lock(m_data_mutex);
+    m_optimized_trajectory.clear();
+    
+    // Sort by keyframe ID and extract poses
+    for (const auto& [id, pose] : optimized_poses) {
+        m_optimized_trajectory.push_back(pose);
+    }
 }
 
 // ===== UI Control Methods =====

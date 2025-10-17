@@ -45,6 +45,69 @@ LidarFrame::LidarFrame(int frame_id,
     m_correspondences.reserve(1000); // Reserve for typical correspondence count
 }
 
+LidarFrame::LidarFrame(const LidarFrame& other)
+    : m_frame_id(other.m_frame_id)
+    , m_keyframe_id(other.m_keyframe_id)
+    , m_timestamp(other.m_timestamp)
+    , m_pose(other.m_pose)
+    , m_relative_pose(other.m_relative_pose)
+    , m_ground_truth_pose(other.m_ground_truth_pose)
+    , m_initial_pose(other.m_initial_pose)
+    , m_kdtree_built(false)  // Don't copy kdtree, rebuild if needed
+    , m_local_map_kdtree_built(false)
+    , m_is_fixed(other.m_is_fixed)
+    , m_has_ground_truth(other.m_has_ground_truth) {
+    
+    // Deep copy point clouds
+    if (other.m_raw_cloud) {
+        m_raw_cloud = std::make_shared<PointCloud>(*other.m_raw_cloud);
+    } else {
+        m_raw_cloud = nullptr;
+    }
+    
+    if (other.m_processed_cloud) {
+        m_processed_cloud = std::make_shared<PointCloud>(*other.m_processed_cloud);
+    } else {
+        m_processed_cloud = nullptr;
+    }
+    
+    if (other.m_feature_cloud) {
+        m_feature_cloud = std::make_shared<PointCloud>(*other.m_feature_cloud);
+    } else {
+        m_feature_cloud = nullptr;
+    }
+    
+    if (other.m_feature_cloud_global) {
+        m_feature_cloud_global = std::make_shared<PointCloud>(*other.m_feature_cloud_global);
+    } else {
+        m_feature_cloud_global = nullptr;
+    }
+    
+    if (other.m_local_map) {
+        m_local_map = std::make_shared<PointCloud>(*other.m_local_map);
+    } else {
+        m_local_map = nullptr;
+    }
+    
+    // Copy correspondences
+    m_correspondences = other.m_correspondences;
+    
+    // Rebuild KdTrees if they existed in the source
+    if (other.m_kdtree_built && other.m_kdtree) {
+        build_kdtree();
+    } else {
+        m_kdtree = nullptr;
+        m_kdtree_built = false;
+    }
+    
+    if (other.m_local_map_kdtree_built && other.m_local_map_kdtree) {
+        build_local_map_kdtree();
+    } else {
+        m_local_map_kdtree = nullptr;
+        m_local_map_kdtree_built = false;
+    }
+}
+
 // ===== Pose Management =====
 
 void LidarFrame::set_pose(const SE3f& pose) {

@@ -76,8 +76,13 @@ public:
      */
     ~LidarFrame() = default;
     
+    /**
+     * @brief Copy constructor - creates deep copy of all data
+     * @param other Frame to copy from
+     */
+    LidarFrame(const LidarFrame& other);
+    
     // Copy and move constructors/operators
-    LidarFrame(const LidarFrame&) = delete;
     LidarFrame& operator=(const LidarFrame&) = delete;
     LidarFrame(LidarFrame&&) = default;
     LidarFrame& operator=(LidarFrame&&) = default;

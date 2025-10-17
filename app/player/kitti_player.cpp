@@ -476,6 +476,12 @@ void KittiPlayer::update_viewer(viewer::PangolinViewer& viewer,
         if (pre_icp_cloud && post_icp_cloud) {
             viewer.update_icp_debug_clouds(pre_icp_cloud, post_icp_cloud);
         }
+        
+        // Update optimized trajectory for debugging (GREEN line)
+        auto optimized_trajectory = m_estimator->get_optimized_trajectory();
+        if (!optimized_trajectory.empty()) {
+            viewer.update_optimized_trajectory(optimized_trajectory);
+        }
     }
     
     // Update trajectory

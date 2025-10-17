@@ -91,6 +91,18 @@ public:
                  std::shared_ptr<database::LidarFrame> curr_frame,
                  const Sophus::SE3f& initial_transform,
                  Sophus::SE3f& optimized_transform);
+
+    /**
+     * @brief Optimize relative pose between two keyframes for loop closure
+     * @param curr_keframe Current keyframe (has fresh kdtree built)
+     * @param matched_keyframe Matched keyframe from loop closure detection
+     * @param optimized_relative_transform Output optimized relative transform (curr to matched)
+     * @return True if optimization succeeded
+     */
+    
+    bool optimize_loop(std::shared_ptr<database::LidarFrame> curr_keframe,
+                 std::shared_ptr<database::LidarFrame> matched_keyframe,
+                 Sophus::SE3f& optimized_relative_transform);
     
     /**
      * @brief Get optimization statistics
@@ -127,6 +139,14 @@ private:
                                std::shared_ptr<database::LidarFrame> curr_frame,
                                DualFrameCorrespondences& correspondences);
     
+    
+    /**
+     * @brief Find correspondences between two keyframes for loop closure
+     */
+    size_t find_correspondences_loop(std::shared_ptr<database::LidarFrame> last_keyframe,
+                                     std::shared_ptr<database::LidarFrame> curr_keyframe,
+                                     DualFrameCorrespondences &correspondences);
+
     /**
      * @brief Extract point cloud for correspondence finding
      */

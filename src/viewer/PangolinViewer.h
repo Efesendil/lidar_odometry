@@ -139,6 +139,13 @@ public:
      * @param pose Pose to add to trajectory
      */
     void add_trajectory_pose(const Matrix4f& pose);
+    
+    /**
+     * @brief Update optimized trajectory from pose graph optimization
+     * @param optimized_poses Map of keyframe ID to optimized pose
+     */
+    void update_optimized_trajectory(const std::map<int, Matrix4f>& optimized_poses);
+    
     // ===== UI Controls =====
     
     /**
@@ -176,6 +183,7 @@ private:
     // ===== Data Storage =====
     std::shared_ptr<database::LidarFrame> m_current_frame;  ///< Current LiDAR frame
     std::vector<Matrix4f> m_trajectory;                     ///< Estimated camera trajectory
+    std::vector<Matrix4f> m_optimized_trajectory;           ///< PGO optimized trajectory (for debugging)
     
     // ===== Keyframe Data =====
     struct KeyframeData {
