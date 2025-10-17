@@ -204,14 +204,6 @@ private:
      */
     void process_loop_closures(std::shared_ptr<database::LidarFrame> current_keyframe, 
                               const std::vector<LoopCandidate>& loop_candidates);
-    
-    /**
-     * @brief Apply loop closure correction immediately
-     * @param current_keyframe Current keyframe to correct
-     * @param matched_keyframe Matched (old) keyframe
-     * @param T_current_matched Relative transformation from current to matched keyframe
-     */
-    void apply_loop_closure_correction(std::shared_ptr<database::LidarFrame> current_keyframe, const SE3f& T_current_old_to_new);
 
     /**
      * @brief Apply pose graph optimization results to all keyframes

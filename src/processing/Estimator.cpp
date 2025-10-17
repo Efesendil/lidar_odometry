@@ -628,11 +628,20 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
         return;
     }
 
-    // Calculate what the corrected pose would be
-    Sophus::SE3f T_current_loop_corrected = current_keyframe->get_pose() * T_current_l2l;
+    // T_current_l2l is the ICP correction: T_original^-1 * T_corrected
+    // ICP optimizes curr_keyframe pose, returns correction transform
     
-    // Calculate pose difference for logging
-    SE3f pose_diff = current_keyframe->get_pose().inverse() * T_current_loop_corrected;
+    // Get current poses (with drift)
+    Sophus::SE3f T_world_current = current_keyframe->get_pose();
+    Sophus::SE3f T_world_matched = matched_keyframe->get_pose();
+    
+    // Apply ICP correction: T_corrected = T_correction * T_original
+    // ICP returns: T_correction = T_original^-1 * T_optimized
+    // So: T_corrected = (T_original^-1 * T_optimized) * T_original = T_optimized
+    Sophus::SE3f T_current_corrected = T_current_l2l * T_world_current;
+    
+    // Calculate pose difference for logging (how much correction ICP suggests)
+    SE3f pose_diff = T_world_current.inverse() * T_current_corrected;
     float translation_diff = pose_diff.translation().norm();
     float rotation_diff = pose_diff.so3().log().norm() * 180.0f / M_PI;
     
@@ -640,8 +649,9 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
                 candidate.query_keyframe_id, candidate.match_keyframe_id,
                 translation_diff, rotation_diff);
     
-    
-    Sophus::SE3f T_matched_to_current = matched_keyframe->get_pose().inverse() * T_current_loop_corrected;
+    // Compute relative pose constraint: from matched to current
+    // Using GTSAM's between() logic: poseFrom.between(poseTo) = poseFrom^-1 * poseTo
+    Sophus::SE3f T_matched_to_current = T_world_matched.inverse() * T_current_corrected;
     
     // Build pose graph from scratch with all keyframes and odometry constraints
     if (m_pose_graph_optimizer) {
@@ -683,8 +693,7 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
             }
         }
         
-        spdlog::info("[Estimator] Pose graph built with {} keyframes and {} odometry constraints", 
-                    m_keyframes.size(), m_keyframes.size() - 1);
+    
         
         // Add loop closure constraint to pose graph
         // T_matched_to_current is the relative pose from matched to current
@@ -711,12 +720,12 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
             float avg_rotation_diff = 0.0f;
             int count = 0;
             
-            for (const auto& keyframe : m_keyframes) {
-                int kf_id = keyframe->get_keyframe_id();
+            for (size_t i = 0; i < m_keyframes.size(); i++) {
+                int kf_id = m_keyframes[i]->get_keyframe_id();
                 auto it = optimized_poses.find(kf_id);
                 
                 if (it != optimized_poses.end()) {
-                    SE3f old_pose = keyframe->get_pose();
+                    SE3f old_pose = m_keyframes[i]->get_pose();
                     SE3f new_pose = it->second;
                     
                     float translation_diff = (new_pose.translation() - old_pose.translation()).norm();
@@ -728,8 +737,63 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
                     avg_rotation_diff += rotation_diff;
                     count++;
                     
-                    spdlog::info("[Estimator]   KF {}: Δt={:.3f}m, Δr={:.2f}°", 
-                               kf_id, translation_diff, rotation_diff);
+                    // Calculate odometry constraint cost
+                    float odom_cost_before = 0.0f;
+                    float odom_cost_after = 0.0f;
+                    
+                    if (i > 0) {
+                        SE3f prev_old = m_keyframes[i-1]->get_pose();
+                        SE3f prev_new = optimized_poses[m_keyframes[i-1]->get_keyframe_id()];
+                        SE3f relative = prev_old.inverse() * old_pose;
+                        
+                        SE3f error_before = relative.inverse() * prev_old.inverse() * old_pose;
+                        SE3f error_after = relative.inverse() * prev_new.inverse() * new_pose;
+                        
+                        Eigen::Matrix<float, 6, 1> log_error_before = error_before.log();
+                        Eigen::Matrix<float, 6, 1> log_error_after = error_after.log();
+                        
+                        float t_weight = 1.0f / (0.1f * 0.1f);
+                        float r_weight = 1.0f / (0.1f * 0.1f);
+                        
+                        odom_cost_before = t_weight * log_error_before.head<3>().squaredNorm() + 
+                                          r_weight * log_error_before.tail<3>().squaredNorm();
+                        odom_cost_after = t_weight * log_error_after.head<3>().squaredNorm() + 
+                                         r_weight * log_error_after.tail<3>().squaredNorm();
+                    }
+                    
+                    // Calculate loop closure constraint cost
+                    float loop_cost_before = 0.0f;
+                    float loop_cost_after = 0.0f;
+                    
+                    if ((matched_keyframe && kf_id == matched_keyframe->get_keyframe_id()) ||
+                        (current_keyframe && kf_id == current_keyframe->get_keyframe_id())) {
+                        
+                        SE3f matched_old = matched_keyframe->get_pose();
+                        SE3f matched_new = optimized_poses[matched_keyframe->get_keyframe_id()];
+                        SE3f current_old = current_keyframe->get_pose();
+                        SE3f current_new = optimized_poses[current_keyframe->get_keyframe_id()];
+                        
+                        SE3f error_before = T_matched_to_current.inverse() * matched_old.inverse() * current_old;
+                        SE3f error_after = T_matched_to_current.inverse() * matched_new.inverse() * current_new;
+                        
+                        Eigen::Matrix<float, 6, 1> log_error_before = error_before.log();
+                        Eigen::Matrix<float, 6, 1> log_error_after = error_after.log();
+                        
+                        float loop_t_weight = 1.0f / (0.01f * 0.01f);
+                        float loop_r_weight = 1.0f / (0.01f * 0.01f);
+                        
+                        loop_cost_before = loop_t_weight * log_error_before.head<3>().squaredNorm() + 
+                                          loop_r_weight * log_error_before.tail<3>().squaredNorm();
+                        loop_cost_after = loop_t_weight * log_error_after.head<3>().squaredNorm() + 
+                                         loop_r_weight * log_error_after.tail<3>().squaredNorm();
+                    }
+                    
+                    float total_cost_before = odom_cost_before + loop_cost_before;
+                    float total_cost_after = odom_cost_after + loop_cost_after;
+                    
+                    spdlog::info("[Estimator]   KF {}: Δt={:.3f}m, Δr={:.2f}°, cost {:.2f}->{:.2f}", 
+                               kf_id, translation_diff, rotation_diff, 
+                               total_cost_before, total_cost_after);
                 }
             }
             
@@ -749,7 +813,9 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
             // Store optimized poses for visualization
             m_optimized_poses = optimized_poses;
             
-            // TODO: Later we will apply the corrections with apply_pose_graph_optimization()
+            // Apply pose graph optimization results to all keyframes
+            spdlog::info("[Estimator] Applying PGO corrections to all keyframes...");
+            apply_pose_graph_optimization();
             
             // Update cooldown
             m_last_successful_loop_keyframe_id = current_keyframe->get_keyframe_id();
@@ -762,126 +828,8 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
 
 
 
-    // // Let's imediately apply the loop closure correction if ICP was successful
-    // if (icp_success){
-    //     apply_loop_closure_correction(current_keyframe, T_current_l2l);
-    //     // cool down after successful loop closure
-    //     m_last_successful_loop_keyframe_id = current_keyframe->get_keyframe_id();
-    //     spdlog::info("[Estimator] Loop closure cooldown activated: next detection after keyframe {}",
-    //                 m_last_successful_loop_keyframe_id + m_config.loop_min_keyframe_gap);
-    // }
-
-    // cool down
-    
-    // // Perform ICP optimization between local maps
-    // // current_keyframe has fresh kdtree built, use it as source
-    // // matched_keyframe's local_map will be used as target features
-    // bool icp_success = m_dual_optimizer->optimize(
-    //     current_keyframe,             // source frame (has fresh kdtree built)
-    //     matched_keyframe,             // target frame (will use local map as features)
-    //     initial_transform_sophus,     // initial relative transform guess
-    //     optimized_transform_sophus    // optimized relative transform (output)
-    // );
-    
-    // auto icp_end = std::chrono::high_resolution_clock::now();
-    // auto icp_time = std::chrono::duration_cast<std::chrono::milliseconds>(icp_end - icp_start).count();
-    
-    // if (icp_success) {
-    //     // Normalize rotation matrix before creating SE3f
-    //     Eigen::Matrix3f rotation_matrix = optimized_transform_sophus.rotationMatrix();
-    //     Eigen::Matrix3f normalized_rotation = util::MathUtils::normalize_rotation_matrix(rotation_matrix);
-        
-    //     // Convert back to SE3f with normalized rotation
-    //     SE3f T_current_matched_optimized(normalized_rotation, optimized_transform_sophus.translation());
-        
-    //     // Calculate pose correction with normalized rotation
-    //     SE3f T_guess_inverse = T_current_matched_guess.inverse();
-    //     SE3f pose_correction_raw = T_guess_inverse * T_current_matched_optimized;
-        
-    //     // Normalize pose correction rotation matrix
-    //     Eigen::Matrix3f correction_rotation = pose_correction_raw.rotationMatrix();
-    //     Eigen::Matrix3f normalized_correction_rotation = util::MathUtils::normalize_rotation_matrix(correction_rotation);
-    //     SE3f pose_correction(normalized_correction_rotation, pose_correction_raw.translation());
-    //     float translation_diff = pose_correction.translation().norm();
-    //     float rotation_diff = pose_correction.so3().log().norm() * 180.0f / M_PI;
-        
-    //     spdlog::info("[Estimator] Loop {} <-> {} ICP successful ({}ms):", 
-    //                 candidate.query_keyframe_id, candidate.match_keyframe_id, icp_time);
-    //     spdlog::info("  -> Translation correction: {:.3f}m, Rotation correction: {:.2f}°", 
-    //                 translation_diff, rotation_diff);
-    //     spdlog::info("  -> Relative pose: T=[{:.3f}, {:.3f}, {:.3f}], R=[{:.3f}, {:.3f}, {:.3f}]",
-    //                 T_current_matched_optimized.translation().x(),
-    //                 T_current_matched_optimized.translation().y(), 
-    //                 T_current_matched_optimized.translation().z(),
-    //                 T_current_matched_optimized.so3().log().x(),
-    //                 T_current_matched_optimized.so3().log().y(),
-    //                 T_current_matched_optimized.so3().log().z());
-        
-    //     // Update last successful loop closure keyframe ID for cooldown
-    //     m_last_successful_loop_keyframe_id = current_keyframe->get_keyframe_id();
-    //     spdlog::info("[Estimator] Loop closure cooldown activated: next detection after keyframe {}",
-    //                 m_last_successful_loop_keyframe_id + m_config.loop_min_keyframe_gap);
-        
-    // } else {
-    //     spdlog::warn("[Estimator] Loop {} <-> {} ICP failed ({}ms)", 
-    //                 candidate.query_keyframe_id, candidate.match_keyframe_id, icp_time);
-    // }
 }
 
-void Estimator::apply_loop_closure_correction(std::shared_ptr<database::LidarFrame> current_keyframe,
-                                              const SE3f& T_current_old_to_new) {
-    
-    // Calculate corrected pose for current keyframe
-    // T_current_new = T_matched * T_current_matched^-1
-    SE3f T_current_corrected = current_keyframe->get_pose() * T_current_old_to_new;
-    // Update current keyframe pose
-    SE3f T_current_old = current_keyframe->get_pose();
-    current_keyframe->set_pose(T_current_corrected);
-
-    // check change translation and rotation
-    float translation_diff = (T_current_corrected.translation() - T_current_old.translation()).norm();
-    float rotation_diff = (T_current_corrected.so3().log() - T_current_old.so3().log()).norm() * 180.0f / M_PI;         
-    spdlog::info("[Estimator] Loop closure correction: Δt={:.3f}m, Δr={:.2f}°", translation_diff, rotation_diff);
-    
-    
-    
-    // Transform local map to new position
-    auto local_map = current_keyframe->get_local_map();
-    if (local_map && !local_map->empty()) {
-        SE3f T_correction = T_current_corrected;
-        Eigen::Matrix4f correction_matrix = T_correction.matrix() * T_current_old.inverse().matrix();
-        
-        // Create new local map with corrected positions
-        auto corrected_local_map = std::make_shared<util::PointCloud>();
-        util::transform_point_cloud(local_map, corrected_local_map, correction_matrix);
-        
-        // Update local map in keyframe
-        current_keyframe->set_local_map(corrected_local_map);
-        
-        // Rebuild KdTree for the corrected local map
-        current_keyframe->build_local_map_kdtree();
-        
-        spdlog::info("[Estimator] Updated local map with {} points and rebuilt KdTree", corrected_local_map->size());
-    }
-    
-    // Update global feature cloud
-    auto global_features = current_keyframe->get_feature_cloud_global();
-    if (global_features && !global_features->empty()) {
-        SE3f T_correction = T_current_corrected * T_current_old.inverse();
-        Eigen::Matrix4f correction_matrix = T_correction.matrix();
-        
-        // Create corrected global features
-        auto corrected_global_features = std::make_shared<util::PointCloud>();
-        util::transform_point_cloud(global_features, corrected_global_features, correction_matrix);
-        
-        // Update global features in keyframe
-        current_keyframe->set_feature_cloud_global(corrected_global_features);
-        
-        spdlog::info("[Estimator] Updated global features with {} points", corrected_global_features->size());
-    }
-    
-    spdlog::info("[Estimator] Loop closure correction applied successfully!");
-}
 
 void Estimator::apply_pose_graph_optimization() {
     if (!m_pose_graph_optimizer) {
@@ -912,7 +860,7 @@ void Estimator::apply_pose_graph_optimization() {
         SE3f old_pose = keyframe->get_pose();
         SE3f new_pose = it->second;
         
-        // Calculate pose correction
+        // Calculate pose correction: T_correction = T_new * T_old^-1
         SE3f pose_correction = new_pose * old_pose.inverse();
         Eigen::Matrix4f correction_matrix = pose_correction.matrix();
         
@@ -925,16 +873,8 @@ void Estimator::apply_pose_graph_optimization() {
         // Update keyframe pose
         keyframe->set_pose(new_pose);
         
-        // Transform and update local map
-        auto local_map = keyframe->get_local_map();
-        if (local_map && !local_map->empty()) {
-            auto corrected_local_map = std::make_shared<util::PointCloud>();
-            util::transform_point_cloud(local_map, corrected_local_map, correction_matrix);
-            keyframe->set_local_map(corrected_local_map);
-            
-            // Rebuild KdTree for the corrected local map
-            keyframe->build_local_map_kdtree();
-        }
+        // Note: Local map is in keyframe's local coordinate, no need to update
+        // Only global feature cloud (in world coordinate) needs to be transformed
         
         // Transform and update global feature cloud
         auto global_features = keyframe->get_feature_cloud_global();

@@ -19,6 +19,7 @@
 #include <ceres/sized_cost_function.h>
 #include <sophus/se3.hpp>
 #include <spdlog/spdlog.h>
+#include "Parameters.h"  // For SE3GlobalParameterization
 
 // Define Vector6d as it's not available in standard Eigen
 namespace Eigen {
@@ -29,100 +30,6 @@ namespace Eigen {
 namespace lidar_odometry {
 namespace optimization {
 
-/**
- * @brief Point-to-Plane ICP cost function with analytical Jacobian
- * 
- * This factor implements the point-to-plane distance metric used in ICP:
- * residual = n_q^T * (R * p + t - q)
- * 
- * where:
- * - p: point in source frame (current local frame)
- * - q: point on target plane (current local frame, transformed from map) 
- * - n_q: normal vector of target plane (current local frame)
- * - R, t: SE3 correction parameters within current local frame
- * 
- * Parameters: SE3 pose correction in tangent space [6]
- * Residual dimension: [1]
- */
-class PointToPlaneFactor : public ceres::SizedCostFunction<1, 6> {
-public:
-    /**
-     * @brief Constructor
-     * @param source_point 3D point in source frame (current local frame)
-     * @param target_point 3D point on target plane (current local frame)
-     * @param plane_normal Normal vector of target plane (current local frame, normalized)
-     * @param information_weight Information weight (sqrt of information matrix)
-     */
-    PointToPlaneFactor(const Eigen::Vector3f& source_point,
-                       const Eigen::Vector3f& target_point,
-                       const Eigen::Vector3f& plane_normal,
-                       double information_weight = 1.0);
-
-    /**
-     * @brief Set outlier flag to disable optimization for this factor
-     * @param is_outlier If true, this factor will not contribute to optimization
-     */
-    void set_outlier(bool is_outlier) { m_is_outlier = is_outlier; }
-    
-    /**
-     * @brief Get outlier flag
-     * @return true if this factor is marked as outlier
-     */
-    bool is_outlier() const { return m_is_outlier; }
-
-    /**
-     * @brief Set robust weight for this factor
-     * @param weight Robust weight computed from loss function
-     */
-    void set_robust_weight(double weight) { m_robust_weight = weight; }
-
-    /**
-     * @brief Get current robust weight
-     * @return Current robust weight
-     */
-    double get_robust_weight() const { return m_robust_weight; }
-
-    /**
-     * @brief Evaluate residual and Jacobian
-     * @param parameters SE3 pose parameters in tangent space [6]
-     * @param residuals Output residual [1]
-     * @param jacobians Output Jacobian matrices [1x6] if not nullptr
-     * @return true if evaluation successful
-     */
-    virtual bool Evaluate(double const* const* parameters,
-                         double* residuals,
-                         double** jacobians) const override;
-
-    /**
-     * @brief Compute raw residual without weighting (for robust estimation)
-     * @param parameters SE3 pose parameters in tangent space [6]
-     * @return Raw residual value
-     */
-    double compute_raw_residual(double const* const* parameters) const;
-
-    /**
-     * @brief Get source point in local coordinates
-     */
-    const Eigen::Vector3f& get_source_point() const { return m_source_point; }
-
-    /**
-     * @brief Get target point in world coordinates
-     */
-    const Eigen::Vector3f& get_target_point() const { return m_target_point; }
-
-    /**
-     * @brief Get plane normal in world coordinates
-     */
-    const Eigen::Vector3f& get_plane_normal() const { return m_plane_normal; }
-
-private:
-    Eigen::Vector3f m_source_point;      // Point in source frame (local)
-    Eigen::Vector3f m_target_point;      // Point on target plane (world)
-    Eigen::Vector3f m_plane_normal;      // Plane normal (world, normalized)
-    double m_information_weight;         // Information weight
-    double m_robust_weight;              // Robust weight for outlier handling
-    bool m_is_outlier;                   // Outlier flag to disable optimization
-};
 
 /**
  * @brief Point-to-Plane ICP cost function between two poses (dual frame)
@@ -348,6 +255,90 @@ private:
     Eigen::Matrix<double, 6, 6> m_information_matrix;  // Information matrix (6x6)
     double m_robust_weight;                             // Robust weight for outlier handling
     bool m_is_outlier;                                  // Outlier flag to disable optimization
+    
+public:
+    // Constraint type for debugging
+    mutable std::string constraint_type = "unknown";
+    mutable int from_kf_id = -1;
+    mutable int to_kf_id = -1;
+};
+
+/**
+ * @brief AutoDiff version of Relative Pose Factor for Pose Graph Optimization
+ * 
+ * This is a simpler, autodiff version of RelativePoseFactor that lets Ceres
+ * compute Jacobians automatically. Easier to implement and debug.
+ * 
+ * Residual: log(T_ij^(-1) * T_i^(-1) * T_j)
+ * 
+ * where:
+ * - T_i, T_j: SE3 transformations in tangent space
+ * - T_ij: Measured relative transformation
+ */
+struct RelativePoseFactorAutoDiff {
+    /**
+     * @brief Constructor
+     * @param relative_measurement Measured relative transformation T_ij
+     * @param information_matrix 6x6 information matrix (sqrt applied element-wise)
+     */
+    RelativePoseFactorAutoDiff(const Sophus::SE3d& relative_measurement,
+                               const Eigen::Matrix<double, 6, 6>& information_matrix)
+        : m_T_ij(relative_measurement)
+        , m_sqrt_information(information_matrix.llt().matrixL()) {}
+    
+    /**
+     * @brief Constructor with scalar weights
+     * @param relative_measurement Measured relative transformation T_ij
+     * @param translation_weight Weight for translation (meters)
+     * @param rotation_weight Weight for rotation (radians)
+     */
+    RelativePoseFactorAutoDiff(const Sophus::SE3d& relative_measurement,
+                               double translation_weight,
+                               double rotation_weight)
+        : m_T_ij(relative_measurement) {
+        // Create diagonal information matrix
+        Eigen::Matrix<double, 6, 6> information = Eigen::Matrix<double, 6, 6>::Zero();
+        information.diagonal() << translation_weight, translation_weight, translation_weight,
+                                   rotation_weight, rotation_weight, rotation_weight;
+        m_sqrt_information = information.llt().matrixL();
+    }
+    
+    /**
+     * @brief Compute residual using AutoDiff
+     * @param pose_i_tangent Tangent space parameters of pose i [tx,ty,tz,rx,ry,rz]
+     * @param pose_j_tangent Tangent space parameters of pose j [tx,ty,tz,rx,ry,rz]
+     * @param residuals Output 6D residual
+     */
+    template <typename T>
+    bool operator()(const T* const pose_i_tangent, 
+                    const T* const pose_j_tangent,
+                    T* residuals) const {
+        // Map parameters to Eigen vectors
+        Eigen::Map<const Eigen::Matrix<T, 6, 1>> xi(pose_i_tangent);
+        Eigen::Map<const Eigen::Matrix<T, 6, 1>> xj(pose_j_tangent);
+        
+        // Convert tangent space to SE3 using Sophus exp
+        Sophus::SE3<T> T_i = Sophus::SE3<T>::exp(xi);
+        Sophus::SE3<T> T_j = Sophus::SE3<T>::exp(xj);
+        
+        // Cast measured relative pose to T
+        Sophus::SE3<T> T_ij = m_T_ij.cast<T>();
+        
+        // Compute error: T_ij^-1 * T_i^-1 * T_j
+        Sophus::SE3<T> T_error = T_ij.inverse() * T_i.inverse() * T_j;
+        
+        // Convert error to tangent space (6D residual)
+        Eigen::Matrix<T, 6, 1> residual_tangent = T_error.log();
+        
+        // Apply sqrt information matrix weighting
+        Eigen::Map<Eigen::Matrix<T, 6, 1>> residuals_map(residuals);
+        residuals_map = m_sqrt_information.cast<T>() * residual_tangent;
+        
+        return true;
+    }
+    
+    Sophus::SE3d m_T_ij;                                   // Measured relative transformation
+    Eigen::Matrix<double, 6, 6> m_sqrt_information;        // Square root of information matrix
 };
 
 } // namespace optimization

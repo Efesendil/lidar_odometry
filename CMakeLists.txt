@@ -67,13 +67,8 @@ include_directories(
     ${CMAKE_BINARY_DIR}/thirdparty/ceres-solver/include
     ${THIRDPARTY_DIR}/nanoflann/include
     ${THIRDPARTY_DIR}/LidarIris
-    ${THIRDPARTY_DIR}/gtsam
-    ${THIRDPARTY_DIR}/gtsam/build
     ${OpenCV_INCLUDE_DIRS}
 )
-
-# Link directories for GTSAM
-link_directories(${THIRDPARTY_DIR}/gtsam/build/gtsam)
 
 # Common source files for all executables
 set(COMMON_SOURCES
@@ -139,7 +134,6 @@ target_link_libraries(kitti_lidar_odometry
     GLEW::GLEW
     Threads::Threads
     ceres
-    gtsam
     tbb
     pango_display
     pango_windowing
@@ -157,7 +151,6 @@ target_link_libraries(mid360_lidar_odometry
     GLEW::GLEW
     Threads::Threads
     ceres
-    gtsam
     tbb
     pango_display
     pango_windowing
