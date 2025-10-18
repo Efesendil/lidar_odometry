@@ -26,10 +26,9 @@ find_package(Eigen3 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Threads REQUIRED)
-find_package(OpenCV REQUIRED)
 
 # Build third-party dependencies from source
-set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
+set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../thirdparty)
 
 # Build Pangolin from thirdparty
 set(BUILD_PANGOLIN_EXAMPLES OFF CACHE BOOL "Build Pangolin examples" FORCE)
@@ -37,11 +36,17 @@ set(BUILD_PANGOLIN_TESTS OFF CACHE BOOL "Build Pangolin tests" FORCE)
 set(BUILD_PANGOLIN_TOOLS OFF CACHE BOOL "Build Pangolin tools" FORCE)
 add_subdirectory(${THIRDPARTY_DIR}/pangolin ${CMAKE_BINARY_DIR}/pangolin EXCLUDE_FROM_ALL)
 
-# Sophus is header-only, no need to build
-# Just include the headers
+# Build Sophus from thirdparty
+set(BUILD_TESTS OFF CACHE BOOL "Build Sophus tests" FORCE)
+set(BUILD_SOPHUS_TESTS OFF CACHE BOOL "Build Sophus tests" FORCE)
+set(BUILD_SOPHUS_EXAMPLES OFF CACHE BOOL "Build Sophus examples" FORCE)
+add_subdirectory(${THIRDPARTY_DIR}/Sophus ${CMAKE_BINARY_DIR}/Sophus)
 
-# spdlog is header-only, no need to build
-# Just include the headers
+# Build spdlog from thirdparty
+set(SPDLOG_BUILD_EXAMPLE OFF CACHE BOOL "Build spdlog examples" FORCE)
+set(SPDLOG_BUILD_TESTS OFF CACHE BOOL "Build spdlog tests" FORCE)
+set(SPDLOG_BUILD_BENCH OFF CACHE BOOL "Build spdlog benchmarks" FORCE)
+add_subdirectory(${THIRDPARTY_DIR}/spdlog ${CMAKE_BINARY_DIR}/spdlog)
 
 # Build Ceres from thirdparty
 set(CERES_DIR ${THIRDPARTY_DIR}/ceres-solver)
@@ -57,113 +62,81 @@ add_subdirectory(${CERES_DIR} ${CMAKE_BINARY_DIR}/ceres EXCLUDE_FROM_ALL)
 
 # Include directories
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
     ${EIGEN3_INCLUDE_DIRS}
     ${THIRDPARTY_DIR}/pangolin/include
-    ${CMAKE_BINARY_DIR}/thirdparty/pangolin/include
+    ${CMAKE_BINARY_DIR}/../thirdparty/pangolin/include
     ${THIRDPARTY_DIR}/Sophus
     ${THIRDPARTY_DIR}/spdlog/include
     ${THIRDPARTY_DIR}/ceres-solver/include
-    ${CMAKE_BINARY_DIR}/thirdparty/ceres-solver/include
+    ${CMAKE_BINARY_DIR}/../thirdparty/ceres-solver/include
     ${THIRDPARTY_DIR}/nanoflann/include
-    ${THIRDPARTY_DIR}/LidarIris
-    ${OpenCV_INCLUDE_DIRS}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Backup/3rdParty/g2o
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Backup/src
 )
 
-# Common source files for all executables
-set(COMMON_SOURCES
+# Add definitions
+
+# Source files
+set(LIDAR_ODOMETRY_SOURCES
     # Database module
-    src/database/LidarFrame.cpp
+    database/LidarFrame.cpp
     
     # Processing module
-    src/processing/FeatureExtractor.cpp
-    src/processing/Estimator.cpp
-    src/processing/LoopClosureDetector.cpp
-    
-    # Third-party
-    thirdparty/LidarIris/LidarIris.cpp
-    thirdparty/LidarIris/fftm/fftm.cpp
+    processing/FeatureExtractor.cpp
+    processing/Estimator.cpp
+    processing/DualFrameICPOptimizer.cpp
+    processing/LoopClosureDetector.cpp
     
     # Optimization module
-    src/optimization/Parameters.cpp
-    src/optimization/Factors.cpp
-    src/optimization/AdaptiveMEstimator.cpp
-    src/optimization/PoseGraphOptimizer.cpp
-    src/optimization/IterativeClosestPointOptimizer.cpp
+    optimization/Parameters.cpp
+    optimization/Factors.cpp
+    optimization/AdaptiveMEstimator.cpp
+    optimization/PoseGraphOptimizerCeres.cpp
     
     # Viewer module
-    src/viewer/PangolinViewer.cpp
+    viewer/PangolinViewer.cpp
     
     # Utility module
-    src/util/Config.cpp
-    src/util/MathUtils.cpp
-    src/util/PointCloudUtils.cpp
+    util/Config.cpp
+    util/MathUtils.cpp
+    util/PointCloudUtils.cpp
+    
+    # Main application
+    ../app/kitti_lidar_odometry.cpp
+    ../app/player/kitti_player.cpp
 )
 
-# KITTI LiDAR odometry executable
-set(KITTI_SOURCES
-    ${COMMON_SOURCES}
-    app/kitti_lidar_odometry.cpp
-    app/player/kitti_player.cpp
-)
+# Create executable
+add_executable(lidar_odometry ${LIDAR_ODOMETRY_SOURCES})
 
-# MID360 LiDAR odometry executable  
-set(MID360_SOURCES
-    ${COMMON_SOURCES}
-    app/mid360_lidar_odometry.cpp
-    app/player/ply_player.cpp
-)
-
-# Create executables
-add_executable(kitti_lidar_odometry ${KITTI_SOURCES})
-add_executable(mid360_lidar_odometry ${MID360_SOURCES})
-
-# Link Eigen3 to targets
+# Link Eigen3 to target
 if(TARGET Eigen3::Eigen)
-    target_link_libraries(kitti_lidar_odometry Eigen3::Eigen)
-    target_link_libraries(mid360_lidar_odometry Eigen3::Eigen)
+    target_link_libraries(lidar_odometry Eigen3::Eigen)
 else()
     # Fallback for older CMake versions
-    target_include_directories(kitti_lidar_odometry PRIVATE ${EIGEN3_INCLUDE_DIR})
-    target_include_directories(mid360_lidar_odometry PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(lidar_odometry PRIVATE ${EIGEN3_INCLUDE_DIR})
 endif()
 
-# Link libraries for KITTI executable
-target_link_libraries(kitti_lidar_odometry
+# Link libraries
+target_link_libraries(lidar_odometry
     OpenGL::GL
     GLEW::GLEW
     Threads::Threads
     ceres
-    tbb
+    Sophus::Sophus
+    spdlog::spdlog
     pango_display
     pango_windowing
     pango_opengl
     pango_core
     pango_image
-    ${OpenCV_LIBS}
     m  # Math library for M_PI
     stdc++fs  # For std::filesystem
 )
 
-# Link libraries for MID360 executable
-target_link_libraries(mid360_lidar_odometry
-    OpenGL::GL
-    GLEW::GLEW
-    Threads::Threads
-    ceres
-    tbb
-    pango_display
-    pango_windowing
-    pango_opengl
-    pango_core
-    pango_image
-    ${OpenCV_LIBS}
-    m  # Math library for M_PI
-    stdc++fs  # For std::filesystem
-)
-
-# Install targets
-install(TARGETS kitti_lidar_odometry mid360_lidar_odometry
+# Install target
+install(TARGETS lidar_odometry
     RUNTIME DESTINATION bin
 )
 

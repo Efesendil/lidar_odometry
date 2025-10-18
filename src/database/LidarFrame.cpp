@@ -20,6 +20,7 @@ LidarFrame::LidarFrame(int frame_id,
                        double timestamp,
                        const PointCloudPtr& raw_cloud)
     : m_frame_id(frame_id)
+    , m_keyframe_id(-1)  // Initialize as not a keyframe
     , m_timestamp(timestamp)
     , m_pose(SE3f())
     , m_relative_pose(SE3f())
@@ -33,7 +34,6 @@ LidarFrame::LidarFrame(int frame_id,
     , m_local_map_kdtree(nullptr)
     , m_local_map_kdtree_built(false)
     , m_is_fixed(false)
-    , m_is_keyframe(false)
     , m_has_ground_truth(false) {
     
     if (!m_raw_cloud) {
@@ -45,7 +45,87 @@ LidarFrame::LidarFrame(int frame_id,
     m_correspondences.reserve(1000); // Reserve for typical correspondence count
 }
 
+LidarFrame::LidarFrame(const LidarFrame& other)
+    : m_frame_id(other.m_frame_id)
+    , m_keyframe_id(other.m_keyframe_id)
+    , m_timestamp(other.m_timestamp)
+    , m_pose(other.m_pose)
+    , m_relative_pose(other.m_relative_pose)
+    , m_ground_truth_pose(other.m_ground_truth_pose)
+    , m_initial_pose(other.m_initial_pose)
+    , m_kdtree_built(false)  // Don't copy kdtree, rebuild if needed
+    , m_local_map_kdtree_built(false)
+    , m_is_fixed(other.m_is_fixed)
+    , m_has_ground_truth(other.m_has_ground_truth) {
+    
+    // Deep copy point clouds
+    if (other.m_raw_cloud) {
+        m_raw_cloud = std::make_shared<PointCloud>(*other.m_raw_cloud);
+    } else {
+        m_raw_cloud = nullptr;
+    }
+    
+    if (other.m_processed_cloud) {
+        m_processed_cloud = std::make_shared<PointCloud>(*other.m_processed_cloud);
+    } else {
+        m_processed_cloud = nullptr;
+    }
+    
+    if (other.m_feature_cloud) {
+        m_feature_cloud = std::make_shared<PointCloud>(*other.m_feature_cloud);
+    } else {
+        m_feature_cloud = nullptr;
+    }
+    
+    if (other.m_feature_cloud_global) {
+        m_feature_cloud_global = std::make_shared<PointCloud>(*other.m_feature_cloud_global);
+    } else {
+        m_feature_cloud_global = nullptr;
+    }
+    
+    if (other.m_local_map) {
+        m_local_map = std::make_shared<PointCloud>(*other.m_local_map);
+    } else {
+        m_local_map = nullptr;
+    }
+    
+    // Copy correspondences
+    m_correspondences = other.m_correspondences;
+    
+    // Rebuild KdTrees if they existed in the source
+    if (other.m_kdtree_built && other.m_kdtree) {
+        build_kdtree();
+    } else {
+        m_kdtree = nullptr;
+        m_kdtree_built = false;
+    }
+    
+    if (other.m_local_map_kdtree_built && other.m_local_map_kdtree) {
+        build_local_map_kdtree();
+    } else {
+        m_local_map_kdtree = nullptr;
+        m_local_map_kdtree_built = false;
+    }
+}
+
 // ===== Pose Management =====
+
+SE3f LidarFrame::get_pose() const {
+    // If this is a keyframe, return the stored pose
+    if (is_keyframe()) {
+        return m_pose;
+    }
+    
+    // If this is a regular frame, compute pose from previous keyframe
+    auto prev_kf = m_previous_keyframe.lock();
+    if (prev_kf) {
+        // Pose = prev_keyframe_pose * relative_pose
+        return prev_kf->get_pose() * m_relative_pose;
+    }
+    
+    // Fallback: return stored pose (should not happen in normal operation)
+    return m_pose;
+}
 
 void LidarFrame::set_pose(const SE3f& pose) {
     m_pose = pose;
@@ -211,21 +291,36 @@ float LidarFrame::compute_distance_to(const LidarFrame& other) const {
 }
 
 void LidarFrame::build_local_map_kdtree() {
+
+
     if (!m_local_map || m_local_map->empty()) {
         spdlog::warn("[LidarFrame] Cannot build KdTree: local map is empty for frame {}", m_frame_id);
         m_local_map_kdtree_built = false;
         return;
     }
-    
-    if (!m_local_map_kdtree) {
-        m_local_map_kdtree = std::make_unique<util::KdTree>();
-    }
-    
+
+    m_local_map_kdtree = std::make_unique<util::KdTree>();
+
     m_local_map_kdtree->setInputCloud(m_local_map);
     m_local_map_kdtree_built = true;
     
-    spdlog::debug("[LidarFrame] Built KdTree for local map with {} points in frame {}", 
-                  m_local_map->size(), m_frame_id);
+
+}
+
+void LidarFrame::clear_local_map_kdtree() {
+    if (m_local_map_kdtree) {
+        m_local_map_kdtree.reset();
+        m_local_map_kdtree_built = false;
+        spdlog::debug("[LidarFrame] Cleared KdTree for frame {}", m_frame_id);
+    }
+}
+
+void LidarFrame::clear_local_map() {
+    if (m_local_map) {
+        m_local_map->clear();
+        m_local_map.reset();
+        spdlog::debug("[LidarFrame] Cleared local map for frame {}", m_frame_id);
+    }
 }
 
 KdTreePtr LidarFrame::get_local_map_kdtree() {

@@ -2,7 +2,7 @@
 data_directory: "/home/eugene/data/KITTI/Velodyne"
 ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
 output_directory: "/home/eugene/data/KITTI/Result"
-seq: "07"
+seq: "05"
 
 # Player settings
 player:
@@ -52,11 +52,11 @@ multi_frame:
 # Robust estimation settings
 robust_estimation:
   use_adaptive_m_estimator: true
-  min_scale_factor: 0.1              # PKO alpha lower bound
+  min_scale_factor: 0.0001              # PKO alpha lower bound
   max_scale_factor: 10.0             # PKO alpha upper bound
   
   # PKO (Probabilistic Kernel Optimization) parameters
-  num_alpha_segments: 100
+  num_alpha_segments: 1000
   truncated_threshold: 10.0
   gmm_components: 3
   gmm_sample_size: 100               # 10% of typical data size
@@ -69,6 +69,22 @@ estimator:
   min_correspondence_points: 50      # More points needed for stability
   parameter_tolerance: 1e-6          # More relaxed tolerance
   function_tolerance: 1e-6           # More relaxed tolerance
+
+# Loop closure detection settings
+loop_detector:
+  enable_loop_detection: true
+  similarity_threshold: 0.3          # Lower is more similar (0.0 = identical)
+  min_keyframe_gap: 50               # Dual purpose: 1) Min keyframe ID gap for candidate search, 2) Cooldown gap after successful loop closure
+  max_search_distance: 5.0          # Maximum distance (meters) to search for loop candidates
+  enable_debug_output: true          # Enable detailed debug logging
+  
+# Pose Graph Optimization (PGO) settings
+pose_graph_optimization:
+  enable_pgo: true                   # Enable pose graph optimization
+  odometry_translation_noise: 1.0    # Odometry constraint translation noise (lower = more trust)
+  odometry_rotation_noise: 1.0       # Odometry constraint rotation noise (lower = more trust)
+  loop_translation_noise: 1.0        # Loop closure constraint translation noise (lower = more trust)
+  loop_rotation_noise: 1.0           # Loop closure constraint rotation noise (lower = more trust)
 
 # Viewer settings
 viewer:

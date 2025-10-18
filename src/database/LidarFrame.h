@@ -76,14 +76,21 @@ public:
      */
     ~LidarFrame() = default;
     
+    /**
+     * @brief Copy constructor - creates deep copy of all data
+     * @param other Frame to copy from
+     */
+    LidarFrame(const LidarFrame& other);
+    
     // Copy and move constructors/operators
-    LidarFrame(const LidarFrame&) = delete;
     LidarFrame& operator=(const LidarFrame&) = delete;
     LidarFrame(LidarFrame&&) = default;
     LidarFrame& operator=(LidarFrame&&) = default;
     
     // ===== Basic Getters =====
     int get_frame_id() const { return m_frame_id; }
+    int get_keyframe_id() const { return m_keyframe_id; }
+    bool is_keyframe() const { return m_keyframe_id >= 0; }
     double get_timestamp() const { return m_timestamp; }
     
     // ===== Pose Management =====
@@ -96,9 +103,32 @@ public:
     
     /**
      * @brief Get current pose (world frame)
+     * Dynamic calculation: if keyframe, return m_pose; else return prev_keyframe->pose * m_relative_pose
      * @return SE3 pose in world coordinates
      */
-    const SE3f& get_pose() const { return m_pose; }
+    SE3f get_pose() const;
+    
+    /**
+     * @brief Get stored pose (for keyframes only, returns actual stored value)
+     * @return Reference to stored SE3 pose
+     */
+    const SE3f& get_stored_pose() const { return m_pose; }
+    
+    /**
+     * @brief Set previous keyframe (for non-keyframes to compute pose dynamically)
+     * @param prev_kf Shared pointer to previous keyframe
+     */
+    void set_previous_keyframe(std::shared_ptr<LidarFrame> prev_kf) { 
+        m_previous_keyframe = prev_kf; 
+    }
+    
+    /**
+     * @brief Get previous keyframe
+     * @return Shared pointer to previous keyframe
+     */
+    std::shared_ptr<LidarFrame> get_previous_keyframe() const { 
+        return m_previous_keyframe.lock(); 
+    }
     
     /**
      * @brief Set relative pose (to previous frame)
@@ -201,6 +231,11 @@ public:
     PointCloudPtr get_local_map() { return m_local_map; }
     PointCloudConstPtr get_local_map() const { return m_local_map; }
     
+    /**
+     * @brief Clear local map to free memory
+     */
+    void clear_local_map();
+    
     // ===== KdTree Management =====
     
     /**
@@ -218,6 +253,11 @@ public:
      * @brief Build KdTree for local map (for keyframes)
      */
     void build_local_map_kdtree();
+    
+    /**
+     * @brief Clear KdTree for local map to save memory
+     */
+    void clear_local_map_kdtree();
     
     /**
      * @brief Get KdTree for local map
@@ -259,16 +299,19 @@ public:
     bool is_fixed() const { return m_is_fixed; }
     
     /**
-     * @brief Set keyframe status
-     * @param is_keyframe True if this frame is a keyframe
+     * @brief Set keyframe ID and status
+     * @param keyframe_id Keyframe identifier (-1 if not a keyframe)
      */
-    void set_keyframe(bool is_keyframe) { m_is_keyframe = is_keyframe; }
+    void set_keyframe_id(int keyframe_id) { m_keyframe_id = keyframe_id; }
     
     /**
-     * @brief Check if frame is a keyframe
-     * @return True if this is a keyframe
+     * @brief Set keyframe status (deprecated - use set_keyframe_id instead)
+     * @param is_keyframe True if this frame is a keyframe
      */
-    bool is_keyframe() const { return m_is_keyframe; }
+    void set_keyframe(bool is_keyframe) { 
+        // For backward compatibility, assign next available ID or -1
+        m_keyframe_id = is_keyframe ? 0 : -1; // This should be properly managed by Estimator
+    }
     
     // ===== Statistics =====
     
@@ -300,13 +343,17 @@ public:
 private:
     // ===== Core Frame Data =====
     int m_frame_id;                    // Unique frame identifier
+    int m_keyframe_id;                 // Keyframe identifier (-1 if not a keyframe)
     double m_timestamp;                // Frame timestamp
     
     // ===== Pose Data =====
-    SE3f m_pose;                       // Current pose in world frame
-    SE3f m_relative_pose;              // Relative pose to previous frame
+    SE3f m_pose;                       // Current pose in world frame (for keyframes) or cached pose
+    SE3f m_relative_pose;              // Relative pose to previous keyframe
     SE3f m_ground_truth_pose;          // Ground truth pose (for evaluation)
     SE3f m_initial_pose;               // Initial pose estimate (e.g., from other sensors)
+    
+    // ===== Frame Relationship =====
+    std::weak_ptr<LidarFrame> m_previous_keyframe;  // Previous keyframe (for pose computation)
     
     // ===== Point Cloud Data =====
     PointCloudPtr m_raw_cloud;         // Original point cloud
@@ -326,7 +373,6 @@ private:
     
     // ===== Status Flags =====
     bool m_is_fixed;                   // True if pose should not be optimized
-    bool m_is_keyframe;                // True if this is a keyframe
     bool m_has_ground_truth;           // True if ground truth pose is available
 };
 

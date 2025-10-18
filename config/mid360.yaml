@@ -56,6 +56,23 @@ estimator:
   parameter_tolerance: 1e-6          # More relaxed tolerance
   function_tolerance: 1e-6           # More relaxed tolerance
 
+
+# Loop closure detection settings
+loop_detector:
+  enable_loop_detection: true
+  similarity_threshold: 0.3          # Lower is more similar (0.0 = identical)
+  min_keyframe_gap: 50               # Dual purpose: 1) Min keyframe ID gap for candidate search, 2) Cooldown gap after successful loop closure
+  max_search_distance: 5.0          # Maximum distance (meters) to search for loop candidates
+  enable_debug_output: true          # Enable detailed debug logging
+  
+# Pose Graph Optimization (PGO) settings
+pose_graph_optimization:
+  enable_pgo: true                   # Enable pose graph optimization
+  odometry_translation_noise: 1.0    # Odometry constraint translation noise (lower = more trust)
+  odometry_rotation_noise: 1.0       # Odometry constraint rotation noise (lower = more trust)
+  loop_translation_noise: 1.0        # Loop closure constraint translation noise (lower = more trust)
+  loop_rotation_noise: 1.0           # Loop closure constraint rotation noise (lower = more trust)
+
 # Viewer settings
 viewer:
   viewer_width: 3000

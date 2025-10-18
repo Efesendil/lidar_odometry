@@ -160,6 +160,8 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         }
         if (config_map.find("robust_estimation.min_scale_factor") != config_map.end()) {
             m_config.min_scale_factor = std::stod(config_map["robust_estimation.min_scale_factor"]);
+
+            std::cout<<"[ConfigManager] Set min_scale_factor to " << m_config.min_scale_factor << std::endl;
         }
         if (config_map.find("robust_estimation.max_scale_factor") != config_map.end()) {
             m_config.max_scale_factor = std::stod(config_map["robust_estimation.max_scale_factor"]);
@@ -305,6 +307,41 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         if (config_map.find("player.auto_ground_truth_path") != config_map.end()) {
             m_config.player_auto_ground_truth_path = (config_map["player.auto_ground_truth_path"] == "true");
         }
+        
+        // Loop closure detection settings
+        if (config_map.find("loop_detector.enable_loop_detection") != config_map.end()) {
+            m_config.loop_enable_loop_detection = (config_map["loop_detector.enable_loop_detection"] == "true");
+        }
+        if (config_map.find("loop_detector.similarity_threshold") != config_map.end()) {
+            m_config.loop_similarity_threshold = std::stof(config_map["loop_detector.similarity_threshold"]);
+        }
+        if (config_map.find("loop_detector.min_keyframe_gap") != config_map.end()) {
+            m_config.loop_min_keyframe_gap = std::stoi(config_map["loop_detector.min_keyframe_gap"]);
+        }
+        if (config_map.find("loop_detector.max_search_distance") != config_map.end()) {
+            m_config.loop_max_search_distance = std::stof(config_map["loop_detector.max_search_distance"]);
+        }
+        if (config_map.find("loop_detector.enable_debug_output") != config_map.end()) {
+            m_config.loop_enable_debug_output = (config_map["loop_detector.enable_debug_output"] == "true");
+        }
+        
+        // Pose Graph Optimization (PGO) settings
+        if (config_map.find("pose_graph_optimization.enable_pgo") != config_map.end()) {
+            m_config.pgo_enable_pgo = (config_map["pose_graph_optimization.enable_pgo"] == "true");
+        }
+        if (config_map.find("pose_graph_optimization.odometry_translation_noise") != config_map.end()) {
+            m_config.pgo_odometry_translation_noise = std::stod(config_map["pose_graph_optimization.odometry_translation_noise"]);
+        }
+        if (config_map.find("pose_graph_optimization.odometry_rotation_noise") != config_map.end()) {
+            m_config.pgo_odometry_rotation_noise = std::stod(config_map["pose_graph_optimization.odometry_rotation_noise"]);
+        }
+        if (config_map.find("pose_graph_optimization.loop_translation_noise") != config_map.end()) {
+            m_config.pgo_loop_translation_noise = std::stod(config_map["pose_graph_optimization.loop_translation_noise"]);
+        }
+        if (config_map.find("pose_graph_optimization.loop_rotation_noise") != config_map.end()) {
+            m_config.pgo_loop_rotation_noise = std::stod(config_map["pose_graph_optimization.loop_rotation_noise"]);
+        }
+        
         return true;
         
     } catch (const std::exception& e) {

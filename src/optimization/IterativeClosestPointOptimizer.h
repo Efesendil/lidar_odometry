@@ -1,5 +1,5 @@
 /**
- * @file      DualFrameICPOptimizer.h
+ * @file      IterativeClosestPointOptimizer.h
  * @brief     Two-frame ICP optimizer using Ceres
  * @author    Seungwon Choi
  * @date      2025-10-04
@@ -14,9 +14,9 @@
 
 #include "../util/Types.h"
 #include "../database/LidarFrame.h"
-#include "../optimization/Factors.h"
-#include "../optimization/Parameters.h"
-#include "../optimization/AdaptiveMEstimator.h"
+#include "Factors.h"
+#include "Parameters.h"
+#include "AdaptiveMEstimator.h"
 #include "../util/ICPConfig.h"  // ICPConfig 사용
 
 #include <ceres/ceres.h>
@@ -25,7 +25,7 @@
 #include <vector>
 
 namespace lidar_odometry {
-namespace processing {
+namespace optimization {
 
 // Import types from util namespace
 using namespace lidar_odometry::util;
@@ -57,26 +57,26 @@ struct DualFrameCorrespondences {
  * This class implements point-to-plane ICP between exactly two frames.
  * Much simpler than MultiFrameOptimizer for debugging and basic use cases.
  */
-class DualFrameICPOptimizer {
+class IterativeClosestPointOptimizer {
 public:
     /**
      * @brief Constructor
      * @param config ICP configuration
      */
-    explicit DualFrameICPOptimizer(const ICPConfig& config = ICPConfig());
+    explicit IterativeClosestPointOptimizer(const ICPConfig& config = ICPConfig());
     
     /**
      * @brief Constructor with AdaptiveMEstimator
      * @param config ICP configuration
      * @param adaptive_estimator Pointer to AdaptiveMEstimator for robust optimization
      */
-    DualFrameICPOptimizer(const ICPConfig& config, 
+    IterativeClosestPointOptimizer(const ICPConfig& config, 
                          std::shared_ptr<optimization::AdaptiveMEstimator> adaptive_estimator);
     
     /**
      * @brief Destructor
      */
-    ~DualFrameICPOptimizer() = default;
+    ~IterativeClosestPointOptimizer() = default;
     
     /**
      * @brief Optimize relative pose between two frames
@@ -91,6 +91,19 @@ public:
                  std::shared_ptr<database::LidarFrame> curr_frame,
                  const Sophus::SE3f& initial_transform,
                  Sophus::SE3f& optimized_transform);
+
+    /**
+     * @brief Optimize relative pose between two keyframes for loop closure
+     * @param curr_keframe Current keyframe (has fresh kdtree built)
+     * @param matched_keyframe Matched keyframe from loop closure detection
+     * @param optimized_relative_transform Output optimized relative transform (curr to matched)
+     * @return True if optimization succeeded
+     */
+    
+    bool optimize_loop(std::shared_ptr<database::LidarFrame> curr_keframe,
+                 std::shared_ptr<database::LidarFrame> matched_keyframe,
+                 Sophus::SE3f& optimized_relative_transform,
+                 float& inlier_ratio);
     
     /**
      * @brief Get optimization statistics
@@ -127,6 +140,14 @@ private:
                                std::shared_ptr<database::LidarFrame> curr_frame,
                                DualFrameCorrespondences& correspondences);
     
+    
+    /**
+     * @brief Find correspondences between two keyframes for loop closure
+     */
+    size_t find_correspondences_loop(std::shared_ptr<database::LidarFrame> last_keyframe,
+                                     std::shared_ptr<database::LidarFrame> curr_keyframe,
+                                     DualFrameCorrespondences &correspondences);
+
     /**
      * @brief Extract point cloud for correspondence finding
      */

@@ -223,9 +223,9 @@ void AdaptiveMEstimator::initialize_pko() {
     m_alpha_candidates.resize(m_config.num_alpha_segments + 1);
     m_partition_functions.resize(m_config.num_alpha_segments + 1);
     
-    // 첫 번째 값 (백업에서는 alpha_upper_bound의 partition function을 첫 번째에 사용)
+    // 첫 번째 값은 min_scale_factor와 그에 해당하는 partition function
     m_alpha_candidates[0] = m_config.min_scale_factor;
-    m_partition_functions[0] = calculate_partition_function(m_config.max_scale_factor); // 백업과 동일
+    m_partition_functions[0] = calculate_partition_function(m_config.min_scale_factor);
     
     // 나머지 값들 (log scaling)
     for (int i = 1; i <= m_config.num_alpha_segments; ++i) {
@@ -253,14 +253,14 @@ double AdaptiveMEstimator::calculate_pko_scale_factor(const std::vector<double>&
     // Fit GMM to residual distribution
     fit_gmm(residuals);
     
-    // Find optimal alpha that minimizes JS divergence (백업과 동일한 방식)
     double best_alpha = m_config.min_scale_factor;
     double best_cost = std::numeric_limits<double>::max();
     
-    // 모든 alpha candidates를 고려하여 최적의 JS divergence를 찾음
     for (size_t i = 1; i < m_alpha_candidates.size(); ++i) {
         double alpha = m_alpha_candidates[i];
 
+
+        // To assure graduated non-convexity
         if(alpha >= m_alpha_star_ref)
             continue;
         
