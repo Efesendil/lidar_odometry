@@ -256,7 +256,7 @@ private:
     bool m_use_ceres_pgo;  // Flag to switch between GTSAM and Ceres PGO
     std::map<int, SE3f> m_optimized_poses;  // Optimized poses from PGO (for debugging visualization)
     
-    // Loop closure storage (to reuse in every PGO)
+    // Loop closure storage
     struct LoopConstraint {
         int from_keyframe_id;
         int to_keyframe_id;
@@ -264,7 +264,10 @@ private:
         double translation_noise;
         double rotation_noise;
     };
-    std::vector<LoopConstraint> m_loop_constraints;  // All detected loop closures
+    std::vector<LoopConstraint> m_loop_constraints;  // All detected loop closures (only used in full PGO mode)
+    
+    // Partial PGO: track which keyframes have been optimized
+    int m_last_optimized_keyframe_id;  // Last keyframe ID that was optimized (-1 = none optimized yet)
     
     // Last keyframe for optimization
     std::shared_ptr<database::LidarFrame> m_last_keyframe;

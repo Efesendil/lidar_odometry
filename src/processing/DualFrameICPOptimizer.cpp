@@ -71,7 +71,7 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
     matched_keyframe_copy->set_local_map(transformed_matched_cloud);
     matched_keyframe_copy->build_local_map_kdtree();
 
-    for(int icp_iter = 0; icp_iter < 100; ++icp_iter)
+    for(int icp_iter = 0; icp_iter < 1000; ++icp_iter)
     {
 
         curr_keyframe_copy->set_pose(optimized_curr_pose);
@@ -202,45 +202,63 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
 
 
 
-        if(delta_norm_trans < m_config.translation_tolerance && delta_norm_so3 < m_config.rotation_tolerance)
+        if(delta_norm_trans < m_config.translation_tolerance/5.0f && delta_norm_so3 < m_config.rotation_tolerance/5.0f)
         {
             // update optimized_relative_transform (from current_old to current_new)
+
+            spdlog::info("[DualFrameICPOptimizer] Loop closure ICP converged at iteration {}", icp_iter+1);
             optimized_relative_transform = curr_keyframe->get_pose().inverse() * optimized_curr_pose;
             success = true;
             break;
         }
     }
 
+    
     // Calculate inlier ratio for validation
     if (success) {
         // Update current keyframe pose to optimized pose
         curr_keyframe_copy->set_pose(optimized_curr_pose);
         
-        // Find final correspondences with optimized pose
-        DualFrameCorrespondences final_correspondences;
-        size_t num_final_correspondences = find_correspondences_loop(matched_keyframe_copy, curr_keyframe_copy, final_correspondences);
-        
-        // Calculate inlier ratio based on correspondence quality
-        size_t num_inliers = 0;
-        const double inlier_distance_threshold = m_config.max_correspondence_distance;
-        
-        for (size_t i = 0; i < final_correspondences.size(); ++i) {
-            if (final_correspondences.residuals[i] < inlier_distance_threshold) {
-                num_inliers++;
+        // Inlier ratio using kd-tree of matched keyframe
+        int inlier_count = 0;
+        int total_count = 0;
+        auto curr_feature_cloud = get_frame_cloud(curr_keyframe_copy);
+        for (size_t i = 0; i < curr_feature_cloud->size(); ++i) {
+            const auto& point_local = curr_feature_cloud->at(i);
+            
+            // Transform to world coordinates
+            Eigen::Vector3f point_local_eigen(point_local.x, point_local.y, point_local.z);
+            Eigen::Vector3f point_world_eigen = curr_keyframe_copy->get_pose().matrix().block<3,1>(0,3) + 
+                                                curr_keyframe_copy->get_pose().matrix().block<3,3>(0,0) * point_local_eigen;
+            
+            // Convert to Point3D for KdTree query
+            util::Point3D point_world;
+            point_world.x = point_world_eigen.x();
+            point_world.y = point_world_eigen.y();
+            point_world.z = point_world_eigen.z();
+            
+            // Find nearest neighbor in matched keyframe's kd-tree (returns squared distance)
+            std::vector<int> indices(1);
+            std::vector<float> sqdist(1);
+            matched_keyframe_copy->get_local_map_kdtree()->nearestKSearch(point_world, 1, indices, sqdist);
+
+            // Check if distance is below threshold (0.1m)
+            if (std::sqrt(sqdist[0]) < 0.5f) {
+                inlier_count++;
             }
+            total_count++;
         }
-        
-        // Get total number of source points
-        auto curr_local_features = get_frame_cloud(curr_keyframe_copy);
-        size_t total_points = curr_local_features->size();
-        
-        inlier_ratio = (total_points > 0) ? static_cast<float>(num_inliers) / static_cast<float>(total_points) : 0.0f;
-        
-        spdlog::debug("[DualFrameICP] Loop ICP inlier ratio: {:.2f}% ({}/{})", 
-                     inlier_ratio * 100.0f, num_inliers, total_points);
-    } else {
-        inlier_ratio = 0.0f;
-    }
+
+        inlier_ratio = static_cast<float>(inlier_count) / static_cast<float>(total_count);
+
+        spdlog::info("[DualFrameICPOptimizer] Loop closure optimization inlier ratio: {:.3f}", inlier_ratio);
+
+        if(inlier_ratio < 0.3f)
+        {
+            success = false;
+        }
+            
+    } 
 
     return success;
 }

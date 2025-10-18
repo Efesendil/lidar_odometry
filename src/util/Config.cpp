@@ -325,6 +325,29 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
             m_config.loop_enable_debug_output = (config_map["loop_detector.enable_debug_output"] == "true");
         }
         
+        // Pose Graph Optimization (PGO) settings
+        if (config_map.find("pose_graph_optimization.enable_pgo") != config_map.end()) {
+            m_config.pgo_enable_pgo = (config_map["pose_graph_optimization.enable_pgo"] == "true");
+        }
+        if (config_map.find("pose_graph_optimization.use_ceres") != config_map.end()) {
+            m_config.pgo_use_ceres = (config_map["pose_graph_optimization.use_ceres"] == "true");
+        }
+        if (config_map.find("pose_graph_optimization.use_full_pgo") != config_map.end()) {
+            m_config.pgo_use_full_pgo = (config_map["pose_graph_optimization.use_full_pgo"] == "true");
+        }
+        if (config_map.find("pose_graph_optimization.odometry_translation_noise") != config_map.end()) {
+            m_config.pgo_odometry_translation_noise = std::stod(config_map["pose_graph_optimization.odometry_translation_noise"]);
+        }
+        if (config_map.find("pose_graph_optimization.odometry_rotation_noise") != config_map.end()) {
+            m_config.pgo_odometry_rotation_noise = std::stod(config_map["pose_graph_optimization.odometry_rotation_noise"]);
+        }
+        if (config_map.find("pose_graph_optimization.loop_translation_noise") != config_map.end()) {
+            m_config.pgo_loop_translation_noise = std::stod(config_map["pose_graph_optimization.loop_translation_noise"]);
+        }
+        if (config_map.find("pose_graph_optimization.loop_rotation_noise") != config_map.end()) {
+            m_config.pgo_loop_rotation_noise = std::stod(config_map["pose_graph_optimization.loop_rotation_noise"]);
+        }
+        
         return true;
         
     } catch (const std::exception& e) {

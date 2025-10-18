@@ -188,10 +188,10 @@ bool PoseGraphOptimizerGTSAM::optimize() {
                     initial_error, final_error, initial_error - final_error);
         spdlog::info("[PGO-GTSAM]   - Iterations: {}", optimizer.iterations());
         
-        // Log detailed per-keyframe pose changes
-        spdlog::info("[PGO-GTSAM] Detailed pose changes:");
-        spdlog::info("[PGO-GTSAM]   KF  |  Δt(m)  | Δr(deg) | Before (x,y,z) -> After (x,y,z)");
-        spdlog::info("[PGO-GTSAM]   ----|---------|---------|-------------------------------------------------------");
+        // Log detailed per-keyframe pose changes (debug level)
+        spdlog::debug("[PGO-GTSAM] Detailed pose changes:");
+        spdlog::debug("[PGO-GTSAM]   KF  |  Δt(m)  | Δr(deg) | Before (x,y,z) -> After (x,y,z)");
+        spdlog::debug("[PGO-GTSAM]   ----|---------|---------|-------------------------------------------------------");
         
         double total_translation_diff = 0.0;
         double total_rotation_diff = 0.0;
@@ -220,7 +220,7 @@ bool PoseGraphOptimizerGTSAM::optimize() {
             total_rotation_diff += rotation_diff;
             num_keyframes++;
             
-            spdlog::info("[PGO-GTSAM]   {:3d} | {:7.4f} | {:8.3f} | ({:7.2f},{:7.2f},{:7.2f}) -> ({:7.2f},{:7.2f},{:7.2f})",
+            spdlog::debug("[PGO-GTSAM]   {:3d} | {:7.4f} | {:8.3f} | ({:7.2f},{:7.2f},{:7.2f}) -> ({:7.2f},{:7.2f},{:7.2f})",
                         kf_id, translation_diff, rotation_diff,
                         old_t.x(), old_t.y(), old_t.z(),
                         new_t.x(), new_t.y(), new_t.z());
@@ -229,7 +229,7 @@ bool PoseGraphOptimizerGTSAM::optimize() {
         if (num_keyframes > 0) {
             double avg_translation_diff = total_translation_diff / num_keyframes;
             double avg_rotation_diff = total_rotation_diff / num_keyframes;
-            spdlog::info("[PGO-GTSAM]   ----|---------|---------|-------------------------------------------------------");
+            spdlog::debug("[PGO-GTSAM]   ----|---------|---------|-------------------------------------------------------");
             spdlog::info("[PGO-GTSAM]   AVG | {:7.4f} | {:8.3f} | (average changes across all keyframes)",
                         avg_translation_diff, avg_rotation_diff);
         }

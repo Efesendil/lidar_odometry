@@ -2,7 +2,7 @@
 data_directory: "/home/eugene/data/KITTI/Velodyne"
 ground_truth_directory: "/home/eugene/data/KITTI/GroundTruth"
 output_directory: "/home/eugene/data/KITTI/Result"
-seq: "08"
+seq: "05"
 
 # Player settings
 player:
@@ -79,6 +79,16 @@ loop_detector:
   enable_debug_output: true          # Enable detailed debug logging
   
   # Note: Iris min/max range will be automatically set based on point_cloud.max_range * 1.2
+
+# Pose Graph Optimization (PGO) settings
+pose_graph_optimization:
+  enable_pgo: true                   # Enable pose graph optimization
+  use_ceres: true                    # Use Ceres optimizer (false = GTSAM)
+  use_full_pgo: true                 # true: full PGO (all keyframes optimize), false: partial PGO (only new keyframes optimize after first loop)
+  odometry_translation_noise: 1.0    # Odometry constraint translation noise (lower = more trust)
+  odometry_rotation_noise: 1.0       # Odometry constraint rotation noise (lower = more trust)
+  loop_translation_noise: 1.0        # Loop closure constraint translation noise (lower = more trust)
+  loop_rotation_noise: 1.0           # Loop closure constraint rotation noise (lower = more trust)
 
 # Viewer settings
 viewer:
