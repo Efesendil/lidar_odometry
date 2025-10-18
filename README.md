@@ -226,3 +226,16 @@ This project is released under the MIT License.
   doi={10.1109/LRA.2025.3536294}
 }
 ```
+
+## Loop Closure Detection
+
+```bibtex
+@inproceedings{wang2020iris,
+  title={LiDAR Iris for Loop-Closure Detection},
+  author={Wang, Ying and Sun, Zezhou and Xu, Cheng-Zhong and Sarma, Sanjay and Yang, Jian and Kong, Hui},
+  booktitle={2020 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  pages={5769--5775},
+  year={2020},
+  organization={IEEE}
+}
+```
