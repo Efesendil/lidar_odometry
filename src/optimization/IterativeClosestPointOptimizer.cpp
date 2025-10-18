@@ -1,5 +1,5 @@
 /**
- * @file      DualFrameICPOptimizer.cpp
+ * @file      IterativeClosestPointOptimizer.cpp
  * @brief     Two-frame ICP optimizer implementation
  * @author    Seungwon Choi
  * @date      2025-10-04
@@ -9,7 +9,7 @@
  * This project is released under the MIT License.
  */
 
-#include "DualFrameICPOptimizer.h"
+#include "IterativeClosestPointOptimizer.h"
 #include "../util/MathUtils.h"
 #include "../util/PointCloudUtils.h"
 #include <spdlog/spdlog.h>
@@ -18,20 +18,20 @@
 #include <algorithm>
 
 namespace lidar_odometry {
-namespace processing {
+namespace optimization {
 
-DualFrameICPOptimizer::DualFrameICPOptimizer(const ICPConfig& config)
+IterativeClosestPointOptimizer::IterativeClosestPointOptimizer(const ICPConfig& config)
     : m_config(config), m_adaptive_estimator(nullptr) {
     
     // Initialize voxel filter
     m_voxel_filter = std::make_unique<util::VoxelGrid>();
     m_voxel_filter->setLeafSize(0.4f);  // Default voxel size
     
-    spdlog::info("[DualFrameICPOptimizer] Initialized with max_iterations={}, max_correspondence_distance={}", 
+    spdlog::info("[IterativeClosestPointOptimizer] Initialized with max_iterations={}, max_correspondence_distance={}", 
                  m_config.max_iterations, m_config.max_correspondence_distance);
 }
 
-DualFrameICPOptimizer::DualFrameICPOptimizer(const ICPConfig& config, 
+IterativeClosestPointOptimizer::IterativeClosestPointOptimizer(const ICPConfig& config, 
                                             std::shared_ptr<optimization::AdaptiveMEstimator> adaptive_estimator)
     : m_config(config), m_adaptive_estimator(adaptive_estimator) {
     
@@ -39,11 +39,11 @@ DualFrameICPOptimizer::DualFrameICPOptimizer(const ICPConfig& config,
     m_voxel_filter = std::make_unique<util::VoxelGrid>();
     m_voxel_filter->setLeafSize(0.4f);  // Default voxel size
     
-    spdlog::info("[DualFrameICPOptimizer] Initialized with max_iterations={}, max_correspondence_distance={} and AdaptiveMEstimator", 
+    spdlog::info("[IterativeClosestPointOptimizer] Initialized with max_iterations={}, max_correspondence_distance={} and AdaptiveMEstimator", 
                  m_config.max_iterations, m_config.max_correspondence_distance);
 }
 
-bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> curr_keyframe,
+bool IterativeClosestPointOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> curr_keyframe,
                                           std::shared_ptr<database::LidarFrame> matched_keyframe,
                                           Sophus::SE3f &optimized_relative_transform,
                                           float& inlier_ratio)
@@ -71,7 +71,7 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
     matched_keyframe_copy->set_local_map(transformed_matched_cloud);
     matched_keyframe_copy->build_local_map_kdtree();
 
-    for(int icp_iter = 0; icp_iter < 1000; ++icp_iter)
+    for(int icp_iter = 0; icp_iter < 100; ++icp_iter)
     {
 
         curr_keyframe_copy->set_pose(optimized_curr_pose);
@@ -202,11 +202,11 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
 
 
 
-        if(delta_norm_trans < m_config.translation_tolerance/5.0f && delta_norm_so3 < m_config.rotation_tolerance/5.0f)
+        if(delta_norm_trans < m_config.translation_tolerance && delta_norm_so3 < m_config.rotation_tolerance)
         {
             // update optimized_relative_transform (from current_old to current_new)
 
-            spdlog::info("[DualFrameICPOptimizer] Loop closure ICP converged at iteration {}", icp_iter+1);
+            spdlog::info("[IterativeClosestPointOptimizer] Loop closure ICP converged at iteration {}", icp_iter+1);
             optimized_relative_transform = curr_keyframe->get_pose().inverse() * optimized_curr_pose;
             success = true;
             break;
@@ -251,7 +251,7 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
 
         inlier_ratio = static_cast<float>(inlier_count) / static_cast<float>(total_count);
 
-        spdlog::info("[DualFrameICPOptimizer] Loop closure optimization inlier ratio: {:.3f}", inlier_ratio);
+        spdlog::info("[IterativeClosestPointOptimizer] Loop closure optimization inlier ratio: {:.3f}", inlier_ratio);
 
         if(inlier_ratio < 0.3f)
         {
@@ -265,7 +265,7 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
 
 
 
-bool DualFrameICPOptimizer::optimize(std::shared_ptr<database::LidarFrame> last_keyframe,
+bool IterativeClosestPointOptimizer::optimize(std::shared_ptr<database::LidarFrame> last_keyframe,
                                      std::shared_ptr<database::LidarFrame> curr_frame,
                                      const Sophus::SE3f& initial_transform,
                                      Sophus::SE3f& optimized_transform) {
@@ -325,7 +325,7 @@ bool DualFrameICPOptimizer::optimize(std::shared_ptr<database::LidarFrame> last_
             double max_val = residuals[n-1];
             
             // Debug residual distribution (only in debug mode)
-            spdlog::debug("[DualFrameICPOptimizer] First iteration residual distribution:");
+            spdlog::debug("[IterativeClosestPointOptimizer] First iteration residual distribution:");
             spdlog::debug("  Count: {}, Mean: {:.4f}, Std: {:.4f}, Median: {:.4f}", 
                         n, mean, std_dev, median);
             spdlog::debug("  Min: {:.4f}, Q25: {:.4f}, Q75: {:.4f}, Max: {:.4f}", 
@@ -416,7 +416,7 @@ bool DualFrameICPOptimizer::optimize(std::shared_ptr<database::LidarFrame> last_
                     
                     // Debug loss function info only for first residual block to avoid spam
                     if (i == 0) {
-                        spdlog::debug("[DualFrameICPOptimizer] Iter {}: Using {} loss with delta={:.6f}, norm_weight={:.3f}", 
+                        spdlog::debug("[IterativeClosestPointOptimizer] Iter {}: Using {} loss with delta={:.6f}, norm_weight={:.3f}", 
                                      icp_iter + 1, loss_type, huber_delta, normalization_weight);
                     }
                 } else {
@@ -491,7 +491,7 @@ bool DualFrameICPOptimizer::optimize(std::shared_ptr<database::LidarFrame> last_
     return true;
 }
 
-size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database::LidarFrame> last_keyframe,
+size_t IterativeClosestPointOptimizer::find_correspondences_loop(std::shared_ptr<database::LidarFrame> last_keyframe,
                                                         std::shared_ptr<database::LidarFrame> curr_keyframe,
                                                         DualFrameCorrespondences &correspondences)
 {
@@ -501,7 +501,7 @@ size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database
     auto local_feature_curr = get_frame_cloud(curr_keyframe);     // Current frame feature cloud (local coordinates)
 
     if(!local_feature_curr || !local_map_last || local_feature_curr->empty() || local_map_last->empty()) {
-        spdlog::warn("[DualFrameICPOptimizer] Empty point clouds - curr_map: {}, matched_map: {}",
+        spdlog::warn("[IterativeClosestPointOptimizer] Empty point clouds - curr_map: {}, matched_map: {}",
                      local_feature_curr ? local_feature_curr->size() : 0,
                      local_map_last ? local_map_last->size() : 0);
         return 0;
@@ -510,7 +510,7 @@ size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database
     auto kdtree_last_ptr = last_keyframe->get_local_map_kdtree();
 
     if(!kdtree_last_ptr) {
-        spdlog::error("[DualFrameICPOptimizer] Last keyframe has no KdTree - this should not happen!");
+        spdlog::error("[IterativeClosestPointOptimizer] Last keyframe has no KdTree - this should not happen!");
         return 0;
     }
 
@@ -613,7 +613,7 @@ size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database
     return correspondences.size();
 }
 
-size_t DualFrameICPOptimizer::find_correspondences(std::shared_ptr<database::LidarFrame> last_keyframe,
+size_t IterativeClosestPointOptimizer::find_correspondences(std::shared_ptr<database::LidarFrame> last_keyframe,
                                                   std::shared_ptr<database::LidarFrame> curr_frame,
                                                   DualFrameCorrespondences& correspondences) {
     
@@ -633,7 +633,7 @@ size_t DualFrameICPOptimizer::find_correspondences(std::shared_ptr<database::Lid
     Eigen::Matrix4f T_lw = T_wl.inverse(); // Inverse transform
     
     if (!last_cloud || !curr_cloud || last_cloud->empty() || curr_cloud->empty()) {
-        spdlog::warn("[DualFrameICPOptimizer] Empty point clouds - last_map: {}, curr_features: {}", 
+        spdlog::warn("[IterativeClosestPointOptimizer] Empty point clouds - last_map: {}, curr_features: {}", 
                      last_cloud ? last_cloud->size() : 0, 
                      curr_cloud ? curr_cloud->size() : 0);
         return 0;
@@ -648,7 +648,7 @@ size_t DualFrameICPOptimizer::find_correspondences(std::shared_ptr<database::Lid
     // Use precomputed KD-tree from keyframe local map
     auto kdtree_ptr = last_keyframe->get_local_map_kdtree();
     if (!kdtree_ptr) {
-        spdlog::error("[DualFrameICPOptimizer] Keyframe has no KdTree - this should not happen!");
+        spdlog::error("[IterativeClosestPointOptimizer] Keyframe has no KdTree - this should not happen!");
         return 0;
     }
     util::KdTree* kdtree = kdtree_ptr.get();
@@ -758,7 +758,7 @@ size_t DualFrameICPOptimizer::find_correspondences(std::shared_ptr<database::Lid
     return correspondences.size();
 }
 
-PointCloudConstPtr DualFrameICPOptimizer::get_frame_cloud(std::shared_ptr<database::LidarFrame> frame) {
+PointCloudConstPtr IterativeClosestPointOptimizer::get_frame_cloud(std::shared_ptr<database::LidarFrame> frame) {
     
     // Try to get feature cloud first, fall back to processed cloud
     auto feature_cloud = frame->get_feature_cloud();
@@ -783,7 +783,7 @@ PointCloudConstPtr DualFrameICPOptimizer::get_frame_cloud(std::shared_ptr<databa
     return nullptr;
 }
 
-bool DualFrameICPOptimizer::is_collinear(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, 
+bool IterativeClosestPointOptimizer::is_collinear(const Eigen::Vector3d& p1, const Eigen::Vector3d& p2, 
                                          const Eigen::Vector3d& p3, double threshold) {
     Eigen::Vector3d v1 = (p2 - p1).normalized();
     Eigen::Vector3d v2 = (p3 - p1).normalized();

@@ -74,17 +74,13 @@ estimator:
 loop_detector:
   enable_loop_detection: true
   similarity_threshold: 0.3          # Lower is more similar (0.0 = identical)
-  min_keyframe_gap: 100               # Dual purpose: 1) Min keyframe ID gap for candidate search, 2) Cooldown gap after successful loop closure
+  min_keyframe_gap: 50               # Dual purpose: 1) Min keyframe ID gap for candidate search, 2) Cooldown gap after successful loop closure
   max_search_distance: 5.0          # Maximum distance (meters) to search for loop candidates
   enable_debug_output: true          # Enable detailed debug logging
   
-  # Note: Iris min/max range will be automatically set based on point_cloud.max_range * 1.2
-
 # Pose Graph Optimization (PGO) settings
 pose_graph_optimization:
   enable_pgo: true                   # Enable pose graph optimization
-  use_ceres: true                    # Use Ceres optimizer (false = GTSAM)
-  use_full_pgo: true                 # true: full PGO (all keyframes optimize), false: partial PGO (only new keyframes optimize after first loop)
   odometry_translation_noise: 1.0    # Odometry constraint translation noise (lower = more trust)
   odometry_rotation_noise: 1.0       # Odometry constraint rotation noise (lower = more trust)
   loop_translation_noise: 1.0        # Loop closure constraint translation noise (lower = more trust)

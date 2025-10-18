@@ -18,9 +18,8 @@
 #include "../optimization/Factors.h"
 #include "../optimization/Parameters.h"
 #include "../optimization/AdaptiveMEstimator.h"
-#include "../optimization/PoseGraphOptimizerGTSAM.h"
-#include "../optimization/PoseGraphOptimizerCeres.h"
-#include "DualFrameICPOptimizer.h"
+#include "../optimization/PoseGraphOptimizer.h"
+#include "../optimization/IterativeClosestPointOptimizer.h"
 #include "LoopClosureDetector.h"
 #include "../util/MathUtils.h"
 
@@ -243,17 +242,15 @@ private:
     PointCloudPtr m_debug_post_icp_cloud;
     
     // Processing tools
-    std::shared_ptr<DualFrameICPOptimizer> m_dual_optimizer;
+    std::shared_ptr<optimization::IterativeClosestPointOptimizer> m_icp_optimizer;
     std::unique_ptr<util::VoxelGrid> m_voxel_filter;
     std::unique_ptr<FeatureExtractor> m_feature_extractor;
     std::shared_ptr<optimization::AdaptiveMEstimator> m_adaptive_estimator;
     
     // Loop closure detection and pose graph optimization
     std::unique_ptr<LoopClosureDetector> m_loop_detector;
-    std::shared_ptr<optimization::PoseGraphOptimizerGTSAM> m_pose_graph_optimizer_gtsam;
-    std::shared_ptr<optimization::PoseGraphOptimizerCeres> m_pose_graph_optimizer_ceres;
+    std::shared_ptr<optimization::PoseGraphOptimizer> m_pose_graph_optimizer;
     int m_last_successful_loop_keyframe_id;  // Last keyframe ID where loop closure succeeded
-    bool m_use_ceres_pgo;  // Flag to switch between GTSAM and Ceres PGO
     std::map<int, SE3f> m_optimized_poses;  // Optimized poses from PGO (for debugging visualization)
     
     // Loop closure storage
@@ -264,10 +261,7 @@ private:
         double translation_noise;
         double rotation_noise;
     };
-    std::vector<LoopConstraint> m_loop_constraints;  // All detected loop closures (only used in full PGO mode)
-    
-    // Partial PGO: track which keyframes have been optimized
-    int m_last_optimized_keyframe_id;  // Last keyframe ID that was optimized (-1 = none optimized yet)
+    std::vector<LoopConstraint> m_loop_constraints;  // All detected loop closures
     
     // Last keyframe for optimization
     std::shared_ptr<database::LidarFrame> m_last_keyframe;

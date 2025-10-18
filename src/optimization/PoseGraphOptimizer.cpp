@@ -1,5 +1,5 @@
 /**
- * @file      PoseGraphOptimizerCeres.cpp
+ * @file      PoseGraphOptimizer.cpp
  * @brief     Implementation of Ceres-based pose graph optimization.
  * @author    Seungwon Choi
  * @date      2025-10-18
@@ -9,7 +9,7 @@
  * This project is released under the MIT License.
  */
 
-#include "PoseGraphOptimizerCeres.h"
+#include "PoseGraphOptimizer.h"
 #include "AdaptiveMEstimator.h"
 #include <spdlog/spdlog.h>
 #include <ceres/ceres.h>
@@ -17,14 +17,14 @@
 namespace lidar_odometry {
 namespace optimization {
 
-PoseGraphOptimizerCeres::PoseGraphOptimizerCeres()
+PoseGraphOptimizer::PoseGraphOptimizer()
     : m_loop_closure_count(0)
     , m_is_optimized(false) {
 }
 
-PoseGraphOptimizerCeres::~PoseGraphOptimizerCeres() = default;
+PoseGraphOptimizer::~PoseGraphOptimizer() = default;
 
-void PoseGraphOptimizerCeres::add_keyframe_pose(int keyframe_id, const SE3f& pose, bool should_fix) {
+void PoseGraphOptimizer::add_keyframe_pose(int keyframe_id, const SE3f& pose, bool should_fix) {
     // Convert SE3 to tangent space
     Sophus::SE3d pose_d = pose.cast<double>();
     Eigen::Vector6d tangent = pose_d.log();
@@ -41,7 +41,7 @@ void PoseGraphOptimizerCeres::add_keyframe_pose(int keyframe_id, const SE3f& pos
     m_is_optimized = false;
 }
 
-void PoseGraphOptimizerCeres::add_odometry_constraint(int from_keyframe_id, int to_keyframe_id,
+void PoseGraphOptimizer::add_odometry_constraint(int from_keyframe_id, int to_keyframe_id,
                                                       const SE3f& relative_pose,
                                                       double translation_weight,
                                                       double rotation_weight) {
@@ -65,7 +65,7 @@ void PoseGraphOptimizerCeres::add_odometry_constraint(int from_keyframe_id, int 
     m_is_optimized = false;
 }
 
-void PoseGraphOptimizerCeres::add_loop_closure_constraint(int from_keyframe_id, int to_keyframe_id,
+void PoseGraphOptimizer::add_loop_closure_constraint(int from_keyframe_id, int to_keyframe_id,
                                                           const SE3f& relative_pose,
                                                           double translation_weight,
                                                           double rotation_weight) {
@@ -91,7 +91,7 @@ void PoseGraphOptimizerCeres::add_loop_closure_constraint(int from_keyframe_id, 
     m_is_optimized = false;
 }
 
-bool PoseGraphOptimizerCeres::optimize() {
+bool PoseGraphOptimizer::optimize() {
     if (m_keyframe_poses.empty()) {
         spdlog::warn("[PGO-Ceres] Cannot optimize: no keyframes added");
         return false;
@@ -186,7 +186,7 @@ bool PoseGraphOptimizerCeres::optimize() {
     return summary.IsSolutionUsable();
 }
 
-bool PoseGraphOptimizerCeres::get_optimized_pose(int keyframe_id, SE3f& optimized_pose) const {
+bool PoseGraphOptimizer::get_optimized_pose(int keyframe_id, SE3f& optimized_pose) const {
     auto it = m_keyframe_poses.find(keyframe_id);
     if (it == m_keyframe_poses.end()) {
         return false;
@@ -199,7 +199,7 @@ bool PoseGraphOptimizerCeres::get_optimized_pose(int keyframe_id, SE3f& optimize
     return true;
 }
 
-std::map<int, PoseGraphOptimizerCeres::SE3f> PoseGraphOptimizerCeres::get_all_optimized_poses() const {
+std::map<int, PoseGraphOptimizer::SE3f> PoseGraphOptimizer::get_all_optimized_poses() const {
     std::map<int, SE3f> result;
     
     for (const auto& [id, kf] : m_keyframe_poses) {
@@ -210,7 +210,7 @@ std::map<int, PoseGraphOptimizerCeres::SE3f> PoseGraphOptimizerCeres::get_all_op
     return result;
 }
 
-void PoseGraphOptimizerCeres::clear() {
+void PoseGraphOptimizer::clear() {
     m_keyframe_poses.clear();
     m_constraints.clear();
     m_loop_closure_count = 0;

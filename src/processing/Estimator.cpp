@@ -10,7 +10,6 @@
  */
 
 #include "Estimator.h"
-#include "DualFrameICPOptimizer.h"
 #include "../util/MathUtils.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
@@ -31,16 +30,13 @@ Estimator::Estimator(const util::SystemConfig& config)
     , m_debug_pre_icp_cloud(new PointCloud())
     , m_debug_post_icp_cloud(new PointCloud())
     , m_last_successful_loop_keyframe_id(-1)  // Initialize to -1 (no successful loop closure yet)
-    , m_use_ceres_pgo(config.pgo_use_ceres)  // Use config value
-    , m_last_optimized_keyframe_id(-1)  // Initialize to -1 (no keyframes optimized yet)
     , m_last_keyframe_pose()
     , m_total_optimization_iterations(0)
     , m_total_optimization_time_ms(0.0)
     , m_optimization_call_count(0)
 {
-    // Initialize both pose graph optimizers (select one based on flag)
-    m_pose_graph_optimizer_gtsam = std::make_shared<optimization::PoseGraphOptimizerGTSAM>();
-    m_pose_graph_optimizer_ceres = std::make_shared<optimization::PoseGraphOptimizerCeres>();
+    // Initialize pose graph optimizer (Ceres only)
+    m_pose_graph_optimizer = std::make_shared<optimization::PoseGraphOptimizer>();
     
     // Create AdaptiveMEstimator with PKO configuration only
     m_adaptive_estimator = std::make_shared<optimization::AdaptiveMEstimator>(
@@ -55,7 +51,7 @@ Estimator::Estimator(const util::SystemConfig& config)
         config.pko_kernel_type
     );
     
-        // Initialize DualFrameICPOptimizer with AdaptiveMEstimator and configuration
+    // Initialize IterativeClosestPointOptimizer with AdaptiveMEstimator and configuration
     ICPConfig dual_frame_config;
     dual_frame_config.max_iterations = config.max_iterations;
     dual_frame_config.translation_tolerance = config.translation_threshold;
@@ -65,7 +61,7 @@ Estimator::Estimator(const util::SystemConfig& config)
     dual_frame_config.use_robust_loss = true;
     dual_frame_config.robust_loss_delta = 0.1;
     
-    m_dual_optimizer = std::make_shared<DualFrameICPOptimizer>(dual_frame_config, m_adaptive_estimator);
+    m_icp_optimizer = std::make_shared<optimization::IterativeClosestPointOptimizer>(dual_frame_config, m_adaptive_estimator);
     
     // Initialize voxel filter for downsampling
     m_voxel_filter = std::make_unique<util::VoxelGrid>();
@@ -118,7 +114,7 @@ bool Estimator::process_frame(std::shared_ptr<database::LidarFrame> current_fram
         return true;
     }
     
-    // Step 4: DualFrameICPOptimizer between current frame and last keyframe
+    // Step 4: optimization::IterativeClosestPointOptimizer between current frame and last keyframe
     auto opt_start = std::chrono::high_resolution_clock::now();
     // Calculate initial guess from velocity model: transform from keyframe to current velocity estimate
     SE3f T_keyframe_current_guess = m_previous_frame->get_pose() * m_velocity;
@@ -224,7 +220,7 @@ SE3f Estimator::estimate_motion_dual_frame(std::shared_ptr<database::LidarFrame>
         return initial_guess;
     }
     
-    // Convert SE3f to Sophus::SE3f for DualFrameICPOptimizer
+    // Convert SE3f to Sophus::SE3f for optimization::IterativeClosestPointOptimizer
     Sophus::SE3f initial_transform_sophus(initial_guess.rotationMatrix(), initial_guess.translation());
     Sophus::SE3f optimized_transform_sophus;
 
@@ -234,7 +230,7 @@ SE3f Estimator::estimate_motion_dual_frame(std::shared_ptr<database::LidarFrame>
                  initial_guess.so3().log().x(), initial_guess.so3().log().y(), initial_guess.so3().log().z());
     
     // Perform dual frame optimization (keyframe as source, current as target)
-    bool success = m_dual_optimizer->optimize(
+    bool success = m_icp_optimizer->optimize(
         keyframe,                    // source frame (keyframe)
         current_frame,              // target frame (current)
         initial_transform_sophus,   // initial relative transform
@@ -250,8 +246,8 @@ SE3f Estimator::estimate_motion_dual_frame(std::shared_ptr<database::LidarFrame>
     SE3f T_keyframe_current(optimized_transform_sophus.rotationMatrix(), optimized_transform_sophus.translation());
     
     // Collect optimization statistics
-    m_total_optimization_iterations += 10; // TODO: Get actual iterations from DualFrameICPOptimizer
-    m_total_optimization_time_ms += 1.0;   // TODO: Get actual time from DualFrameICPOptimizer
+    m_total_optimization_iterations += 10; // TODO: Get actual iterations from optimization::IterativeClosestPointOptimizer
+    m_total_optimization_time_ms += 1.0;   // TODO: Get actual time from optimization::IterativeClosestPointOptimizer
     m_optimization_call_count++;
     
     spdlog::debug("[Estimator] Dual frame optimization completed successfully");
@@ -409,7 +405,7 @@ void Estimator::create_keyframe(std::shared_ptr<database::LidarFrame> frame)
         }
     }
     
-    // Store filtered local map in keyframe for DualFrameICPOptimizer
+    // Store filtered local map in keyframe for optimization::IterativeClosestPointOptimizer
     frame->set_local_map(filtered_local_map);
     
     // Build KdTree for the local map at keyframe creation
@@ -622,7 +618,7 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
     Sophus::SE3f T_current_l2l;
     float inlier_ratio = 0.0f;
 
-    bool icp_success = m_dual_optimizer->optimize_loop(
+    bool icp_success = m_icp_optimizer->optimize_loop(
         current_keyframe,             // source frame (has fresh kdtree built)
         matched_keyframe,             // target frame (will use local map as features)
         T_current_l2l,                // optimized relative transform (output)
@@ -676,7 +672,7 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
     }
     
     // Build pose graph from scratch with all keyframes and odometry constraints
-    spdlog::info("[PGO] Using {} optimizer", m_use_ceres_pgo ? "Ceres" : "GTSAM");
+    spdlog::info("[PGO] Using Ceres optimizer");
     
     // Store pre-PGO poses for visualization (before optimization)
     std::map<int, SE3f> pre_pgo_poses;
@@ -686,256 +682,84 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
     }
     
     // Clear previous graph
-    if (m_use_ceres_pgo) {
-        m_pose_graph_optimizer_ceres->clear();
-    } else {
-        m_pose_graph_optimizer_gtsam->clear();
-    }
+    m_pose_graph_optimizer->clear();
     
     // Add all keyframes and odometry constraints
     spdlog::info("[Estimator] Building pose graph with {} keyframes", m_keyframes.size());
     
-    if (m_config.pgo_use_full_pgo) {
-        // ========== FULL PGO MODE: All keyframes optimize ==========
-        spdlog::info("[Estimator] [Full PGO] All {} keyframes will be optimized", m_keyframes.size());
+    // Add all keyframes as optimization variables
+    for (size_t i = 0; i < m_keyframes.size(); ++i) {
+        auto& kf = m_keyframes[i];
         
-        for (size_t i = 0; i < m_keyframes.size(); ++i) {
-            auto& kf = m_keyframes[i];
-            
-            if (i == 0) {
-                // First keyframe: add with prior factor (constant)
-                if (m_use_ceres_pgo) {
-                    m_pose_graph_optimizer_ceres->add_keyframe_pose(
-                        kf->get_keyframe_id(),
-                        pre_pgo_poses[kf->get_keyframe_id()],
-                        true);
-                } else {
-                    m_pose_graph_optimizer_gtsam->add_keyframe_pose(
-                        kf->get_keyframe_id(),
-                        pre_pgo_poses[kf->get_keyframe_id()],
-                        true);
-                }
-            } else {
-                // Non-first keyframe: add as variable
-                if (m_use_ceres_pgo) {
-                    m_pose_graph_optimizer_ceres->add_keyframe_pose(
-                        kf->get_keyframe_id(),
-                        pre_pgo_poses[kf->get_keyframe_id()],
-                        false);
-                } else {
-                    m_pose_graph_optimizer_gtsam->add_keyframe_pose(
-                        kf->get_keyframe_id(),
-                        pre_pgo_poses[kf->get_keyframe_id()],
-                        false);
-                }
-                
-                // Add odometry constraint from previous keyframe
-                auto& prev_kf = m_keyframes[i-1];
-                SE3f relative_pose = kf->get_relative_pose();
-                
-                if (m_use_ceres_pgo) {
-                    double odom_trans_noise = m_config.pgo_odometry_translation_noise;
-                    double odom_rot_noise = m_config.pgo_odometry_rotation_noise;
-                    double trans_weight = 1.0 / (odom_trans_noise * odom_trans_noise);
-                    double rot_weight = 1.0 / (odom_rot_noise * odom_rot_noise);
-                    m_pose_graph_optimizer_ceres->add_odometry_constraint(
-                        prev_kf->get_keyframe_id(),
-                        kf->get_keyframe_id(),
-                        relative_pose,
-                        trans_weight,
-                        rot_weight
-                    );
-                } else {
-                    m_pose_graph_optimizer_gtsam->add_odometry_constraint(
-                        prev_kf->get_keyframe_id(),
-                        kf->get_keyframe_id(),
-                        relative_pose,
-                        m_config.pgo_odometry_translation_noise,
-                        m_config.pgo_odometry_rotation_noise
-                    );
-                }
-            }
-        }
-        
-    } else {
-        // ========== PARTIAL PGO MODE: Only new keyframes optimize ==========
-        int split_keyframe_id = m_last_optimized_keyframe_id;
-        int num_constant = 0;
-        int num_variable = 0;
-        
-        if (split_keyframe_id < 0) {
-            // First loop closure: do full PGO (all keyframes optimize)
-            spdlog::info("[Estimator] [Partial PGO] First loop closure - performing full PGO");
-            split_keyframe_id = -1; // All keyframes will be variable
+        if (i == 0) {
+            // First keyframe: add with prior factor (constant)
+            m_pose_graph_optimizer->add_keyframe_pose(
+                kf->get_keyframe_id(),
+                pre_pgo_poses[kf->get_keyframe_id()],
+                true);
         } else {
-            spdlog::info("[Estimator] [Partial PGO] Split at keyframe {}: [0-{}] constant, [{}-{}] variable",
-                        split_keyframe_id, split_keyframe_id, split_keyframe_id+1, m_keyframes.back()->get_keyframe_id());
-        }
-        
-        for (size_t i = 0; i < m_keyframes.size(); ++i) {
-            auto& kf = m_keyframes[i];
-            int kf_id = kf->get_keyframe_id();
-            bool is_constant = (kf_id <= split_keyframe_id);
+            // Non-first keyframe: add as variable
+            m_pose_graph_optimizer->add_keyframe_pose(
+                kf->get_keyframe_id(),
+                pre_pgo_poses[kf->get_keyframe_id()],
+                false);
             
-            if (i == 0) {
-                // First keyframe: always constant (prior factor)
-                if (m_use_ceres_pgo) {
-                    m_pose_graph_optimizer_ceres->add_keyframe_pose(
-                        kf_id,
-                        pre_pgo_poses[kf_id],
-                        true);
-                } else {
-                    m_pose_graph_optimizer_gtsam->add_keyframe_pose(
-                        kf_id,
-                        pre_pgo_poses[kf_id],
-                        true);
-                }
-                num_constant++;
-            } else {
-                // Other keyframes: constant if <= split_keyframe_id, variable otherwise
-                if (m_use_ceres_pgo) {
-                    m_pose_graph_optimizer_ceres->add_keyframe_pose(
-                        kf_id,
-                        pre_pgo_poses[kf_id],
-                        is_constant);
-                } else {
-                    m_pose_graph_optimizer_gtsam->add_keyframe_pose(
-                        kf_id,
-                        pre_pgo_poses[kf_id],
-                        is_constant);
-                }
-                
-                if (is_constant) {
-                    num_constant++;
-                } else {
-                    num_variable++;
-                }
-                
-                // Add odometry constraint from previous keyframe
-                auto& prev_kf = m_keyframes[i-1];
-                SE3f relative_pose = kf->get_relative_pose();
-                
-                if (m_use_ceres_pgo) {
-                    double odom_trans_noise = m_config.pgo_odometry_translation_noise;
-                    double odom_rot_noise = m_config.pgo_odometry_rotation_noise;
-                    double trans_weight = 1.0 / (odom_trans_noise * odom_trans_noise);
-                    double rot_weight = 1.0 / (odom_rot_noise * odom_rot_noise);
-                    m_pose_graph_optimizer_ceres->add_odometry_constraint(
-                        prev_kf->get_keyframe_id(),
-                        kf_id,
-                        relative_pose,
-                        trans_weight,
-                        rot_weight
-                    );
-                } else {
-                    m_pose_graph_optimizer_gtsam->add_odometry_constraint(
-                        prev_kf->get_keyframe_id(),
-                        kf_id,
-                        relative_pose,
-                        m_config.pgo_odometry_translation_noise,
-                        m_config.pgo_odometry_rotation_noise
-                    );
-                }
-            }
+            // Add odometry constraint from previous keyframe
+            auto& prev_kf = m_keyframes[i-1];
+            SE3f relative_pose = kf->get_relative_pose();
+            
+            double odom_trans_noise = m_config.pgo_odometry_translation_noise;
+            double odom_rot_noise = m_config.pgo_odometry_rotation_noise;
+            double trans_weight = 1.0 / (odom_trans_noise * odom_trans_noise);
+            double rot_weight = 1.0 / (odom_rot_noise * odom_rot_noise);
+            m_pose_graph_optimizer->add_odometry_constraint(
+                prev_kf->get_keyframe_id(),
+                kf->get_keyframe_id(),
+                relative_pose,
+                trans_weight,
+                rot_weight
+            );
         }
-        
-        spdlog::info("[Estimator] [Partial PGO] Added {} constant keyframes, {} variable keyframes", 
-                     num_constant, num_variable);
     }
     
-    // Store loop closure constraint (only for full PGO mode)
-        LoopConstraint loop_constraint;
-        loop_constraint.from_keyframe_id = matched_keyframe->get_keyframe_id();
-        loop_constraint.to_keyframe_id = current_keyframe->get_keyframe_id();
-        loop_constraint.relative_pose = T_matched_to_current;
-        loop_constraint.translation_noise = m_config.pgo_loop_translation_noise;
-        loop_constraint.rotation_noise = m_config.pgo_loop_rotation_noise;
-        
-        if (m_config.pgo_use_full_pgo) {
-            // Full PGO: accumulate all loop constraints
-            m_loop_constraints.push_back(loop_constraint);
-            spdlog::info("[Estimator] [Full PGO] Stored loop closure constraint: {} -> {} (total loops: {})",
-                        loop_constraint.from_keyframe_id, loop_constraint.to_keyframe_id, 
-                        m_loop_constraints.size());
-        } else {
-            // Partial PGO: use only current loop constraint
-            spdlog::info("[Estimator] [Partial PGO] Using current loop closure constraint: {} -> {}",
-                        loop_constraint.from_keyframe_id, loop_constraint.to_keyframe_id);
-        }
-        
-        // Add loop closure constraints to pose graph
-        if (m_config.pgo_use_full_pgo) {
-            // Full PGO: add ALL accumulated loop constraints
-            spdlog::info("[Estimator] [Full PGO] Adding {} stored loop constraints to PGO", m_loop_constraints.size());
-            for (const auto& lc : m_loop_constraints) {
-                if (m_use_ceres_pgo) {
-                    double trans_weight = 1.0 / (lc.translation_noise * lc.translation_noise);
-                    double rot_weight = 1.0 / (lc.rotation_noise * lc.rotation_noise);
-                    spdlog::debug("[Estimator]   Loop {}->{}: trans_weight={}, rot_weight={}", 
-                                 lc.from_keyframe_id, lc.to_keyframe_id, trans_weight, rot_weight);
-                    m_pose_graph_optimizer_ceres->add_loop_closure_constraint(
-                        lc.from_keyframe_id,
-                        lc.to_keyframe_id,
-                        lc.relative_pose,
-                        trans_weight,
-                        rot_weight
-                    );
-                } else {
-                    spdlog::debug("[Estimator]   Loop {}->{}: trans_noise={}, rot_noise={}", 
-                                 lc.from_keyframe_id, lc.to_keyframe_id, lc.translation_noise, lc.rotation_noise);
-                    m_pose_graph_optimizer_gtsam->add_loop_closure_constraint(
-                        lc.from_keyframe_id,
-                        lc.to_keyframe_id,
-                        lc.relative_pose,
-                        lc.translation_noise,
-                        lc.rotation_noise
-                    );
-                }
-            }
-        } else {
-            // Partial PGO: add ONLY current loop constraint (don't use accumulated ones)
-            spdlog::info("[Estimator] [Partial PGO] Adding current loop constraint to PGO: {} -> {}",
-                        loop_constraint.from_keyframe_id, loop_constraint.to_keyframe_id);
-            if (m_use_ceres_pgo) {
-                double trans_weight = 1.0 / (loop_constraint.translation_noise * loop_constraint.translation_noise);
-                double rot_weight = 1.0 / (loop_constraint.rotation_noise * loop_constraint.rotation_noise);
-                spdlog::debug("[Estimator]   Loop {}->{}: trans_weight={}, rot_weight={}", 
-                             loop_constraint.from_keyframe_id, loop_constraint.to_keyframe_id, trans_weight, rot_weight);
-                m_pose_graph_optimizer_ceres->add_loop_closure_constraint(
-                    loop_constraint.from_keyframe_id,
-                    loop_constraint.to_keyframe_id,
-                    loop_constraint.relative_pose,
-                    trans_weight,
-                    rot_weight
-                );
-            } else {
-                spdlog::debug("[Estimator]   Loop {}->{}: trans_noise={}, rot_noise={}", 
-                             loop_constraint.from_keyframe_id, loop_constraint.to_keyframe_id, 
-                             loop_constraint.translation_noise, loop_constraint.rotation_noise);
-                m_pose_graph_optimizer_gtsam->add_loop_closure_constraint(
-                    loop_constraint.from_keyframe_id,
-                    loop_constraint.to_keyframe_id,
-                    loop_constraint.relative_pose,
-                    loop_constraint.translation_noise,
-                    loop_constraint.rotation_noise
-                );
-            }
-        }
-        
-        // Perform pose graph optimization
-        spdlog::info("[Estimator] Running {} pose graph optimization with {} loop closures...", 
-                     m_use_ceres_pgo ? "Ceres" : "GTSAM",
-                     m_loop_constraints.size());
-        
-        bool opt_success = m_use_ceres_pgo ? 
-            m_pose_graph_optimizer_ceres->optimize() : 
-            m_pose_graph_optimizer_gtsam->optimize();
+    // Store and add loop closure constraint
+    LoopConstraint loop_constraint;
+    loop_constraint.from_keyframe_id = matched_keyframe->get_keyframe_id();
+    loop_constraint.to_keyframe_id = current_keyframe->get_keyframe_id();
+    loop_constraint.relative_pose = T_matched_to_current;
+    loop_constraint.translation_noise = m_config.pgo_loop_translation_noise;
+    loop_constraint.rotation_noise = m_config.pgo_loop_rotation_noise;
+    
+    // Accumulate all loop constraints
+    m_loop_constraints.push_back(loop_constraint);
+    spdlog::info("[Estimator] Stored loop closure constraint: {} -> {} (total loops: {})",
+                loop_constraint.from_keyframe_id, loop_constraint.to_keyframe_id, 
+                m_loop_constraints.size());
+    
+    // Add ALL accumulated loop constraints to pose graph
+    spdlog::info("[Estimator] Adding {} stored loop constraints to PGO", m_loop_constraints.size());
+    for (const auto& lc : m_loop_constraints) {
+        double trans_weight = 1.0 / (lc.translation_noise * lc.translation_noise);
+        double rot_weight = 1.0 / (lc.rotation_noise * lc.rotation_noise);
+        spdlog::debug("[Estimator]   Loop {}->{}: trans_weight={}, rot_weight={}", 
+                     lc.from_keyframe_id, lc.to_keyframe_id, trans_weight, rot_weight);
+        m_pose_graph_optimizer->add_loop_closure_constraint(
+            lc.from_keyframe_id,
+            lc.to_keyframe_id,
+            lc.relative_pose,
+            trans_weight,
+            rot_weight
+        );
+    }
+    
+    // Perform pose graph optimization
+    spdlog::info("[Estimator] Running Ceres pose graph optimization with {} loop closures...", m_loop_constraints.size());
+    
+    bool opt_success = m_pose_graph_optimizer->optimize();
         
         if (opt_success) {
             // Print pose corrections without applying them
-            auto optimized_poses = m_use_ceres_pgo ? 
-                m_pose_graph_optimizer_ceres->get_all_optimized_poses() :
-                m_pose_graph_optimizer_gtsam->get_all_optimized_poses();
+            auto optimized_poses = m_pose_graph_optimizer->get_all_optimized_poses();
             
             spdlog::info("[Estimator] ========== PGO Results (NOT APPLIED) ==========");
             spdlog::info("[Estimator] Total keyframes optimized: {}", optimized_poses.size());
@@ -1052,13 +876,6 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
             spdlog::info("[Estimator] Applying PGO corrections to all keyframes...");
             apply_pose_graph_optimization();
             
-            // Update last optimized keyframe ID (for partial PGO mode)
-            if (!m_config.pgo_use_full_pgo) {
-                m_last_optimized_keyframe_id = current_keyframe->get_keyframe_id();
-                spdlog::info("[Estimator] [Partial PGO] Updated last_optimized_keyframe_id to {}", 
-                            m_last_optimized_keyframe_id);
-            }
-            
             // Update cooldown
             m_last_successful_loop_keyframe_id = current_keyframe->get_keyframe_id();
             spdlog::info("[Estimator] Loop closure cooldown activated: next detection after keyframe {}",
@@ -1069,10 +886,8 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
 }
 
 void Estimator::apply_pose_graph_optimization() {
-    // Get all optimized poses from active pose graph optimizer
-    auto optimized_poses = m_use_ceres_pgo ? 
-        m_pose_graph_optimizer_ceres->get_all_optimized_poses() :
-        m_pose_graph_optimizer_gtsam->get_all_optimized_poses();
+    // Get all optimized poses from Ceres pose graph optimizer
+    auto optimized_poses = m_pose_graph_optimizer->get_all_optimized_poses();
     
     if (optimized_poses.empty()) {
         spdlog::warn("[Estimator] No optimized poses available from pose graph!");
@@ -1087,7 +902,10 @@ void Estimator::apply_pose_graph_optimization() {
     Sophus::SE3f last_keyframe_pose_after_opt = optimized_poses[last_keyframe->get_keyframe_id()];
     Sophus::SE3f total_correction = last_keyframe_pose_after_opt * last_keyframe_pose_before_opt.inverse();
     
-    // Update all keyframe poses
+    // Update all keyframe poses (absolute poses only)
+    // NOTE: We do NOT recalculate relative poses after PGO!
+    // The PGO optimization already considers relative pose constraints,
+    // so recalculating and normalizing them would distort the optimization result.
     for (auto& keyframe : m_keyframes) {
         int kf_id = keyframe->get_keyframe_id();
         
@@ -1106,35 +924,12 @@ void Estimator::apply_pose_graph_optimization() {
         spdlog::debug("[Estimator] Keyframe {}: Δt={:.3f}m, Δr={:.2f}°", 
                      kf_id, translation_diff, rotation_diff);
         
-        // Update keyframe pose
+        // Update keyframe pose (absolute pose)
         keyframe->set_pose(new_pose);
     }
     
-    // Update relative poses (odometry constraints) between consecutive keyframes
-    spdlog::info("[Estimator] Updating relative poses for all keyframes after PGO...");
-    for (size_t i = 1; i < m_keyframes.size(); ++i) {
-        auto& curr_kf = m_keyframes[i];
-        auto& prev_kf = m_keyframes[i-1];
-        
-        SE3f prev_pose = prev_kf->get_pose();
-        SE3f curr_pose = curr_kf->get_pose();
-        
-        // Compute new relative pose: T_prev_curr = T_prev^-1 * T_curr
-        SE3f relative_pose_raw = prev_pose.inverse() * curr_pose;
-        
-        // Normalize rotation matrix for numerical stability
-        Eigen::Matrix3f rotation_matrix = relative_pose_raw.rotationMatrix();
-        Eigen::Matrix3f normalized_rotation = util::MathUtils::normalize_rotation_matrix(rotation_matrix);
-        SE3f relative_pose(normalized_rotation, relative_pose_raw.translation());
-        
-        // Update stored relative pose
-        curr_kf->set_relative_pose(relative_pose);
-        
-        spdlog::debug("[Estimator] Updated relative pose for keyframe {}: t_norm={:.3f}, r_norm={:.3f}°", 
-                     curr_kf->get_keyframe_id(), 
-                     relative_pose.translation().norm(),
-                     relative_pose.so3().log().norm() * 180.0f / M_PI);
-    }
+    // Relative poses are kept as-is (not recalculated from absolute poses)
+    // This preserves the optimization result from PGO
 
     // transform last keyframe's local map
     auto last_local_map = last_keyframe->get_local_map();

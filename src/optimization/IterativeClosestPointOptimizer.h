@@ -1,5 +1,5 @@
 /**
- * @file      DualFrameICPOptimizer.h
+ * @file      IterativeClosestPointOptimizer.h
  * @brief     Two-frame ICP optimizer using Ceres
  * @author    Seungwon Choi
  * @date      2025-10-04
@@ -14,9 +14,9 @@
 
 #include "../util/Types.h"
 #include "../database/LidarFrame.h"
-#include "../optimization/Factors.h"
-#include "../optimization/Parameters.h"
-#include "../optimization/AdaptiveMEstimator.h"
+#include "Factors.h"
+#include "Parameters.h"
+#include "AdaptiveMEstimator.h"
 #include "../util/ICPConfig.h"  // ICPConfig 사용
 
 #include <ceres/ceres.h>
@@ -25,7 +25,7 @@
 #include <vector>
 
 namespace lidar_odometry {
-namespace processing {
+namespace optimization {
 
 // Import types from util namespace
 using namespace lidar_odometry::util;
@@ -57,26 +57,26 @@ struct DualFrameCorrespondences {
  * This class implements point-to-plane ICP between exactly two frames.
  * Much simpler than MultiFrameOptimizer for debugging and basic use cases.
  */
-class DualFrameICPOptimizer {
+class IterativeClosestPointOptimizer {
 public:
     /**
      * @brief Constructor
      * @param config ICP configuration
      */
-    explicit DualFrameICPOptimizer(const ICPConfig& config = ICPConfig());
+    explicit IterativeClosestPointOptimizer(const ICPConfig& config = ICPConfig());
     
     /**
      * @brief Constructor with AdaptiveMEstimator
      * @param config ICP configuration
      * @param adaptive_estimator Pointer to AdaptiveMEstimator for robust optimization
      */
-    DualFrameICPOptimizer(const ICPConfig& config, 
+    IterativeClosestPointOptimizer(const ICPConfig& config, 
                          std::shared_ptr<optimization::AdaptiveMEstimator> adaptive_estimator);
     
     /**
      * @brief Destructor
      */
-    ~DualFrameICPOptimizer() = default;
+    ~IterativeClosestPointOptimizer() = default;
     
     /**
      * @brief Optimize relative pose between two frames

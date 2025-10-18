@@ -1,5 +1,5 @@
 /**
- * @file      PoseGraphOptimizerCeres.h
+ * @file      PoseGraphOptimizer.h
  * @brief     Ceres-based pose graph optimization for loop closure.
  * @author    Seungwon Choi
  * @date      2025-10-18
@@ -31,22 +31,21 @@ namespace optimization {
  * - Loop closure constraints (RelativePoseFactor between non-consecutive keyframes)
  * - Prior factor on first pose (strong constraint)
  * 
- * Uses the corrected RelativePoseFactor with proper Jacobian calculation
- * matching GTSAM's BetweenFactor mathematics.
+ * Uses the corrected RelativePoseFactor with proper Jacobian calculation.
  */
-class PoseGraphOptimizerCeres {
+class PoseGraphOptimizer {
 public:
     using SE3f = Sophus::SE3f;
     
     /**
      * @brief Constructor
      */
-    PoseGraphOptimizerCeres();
+    PoseGraphOptimizer();
     
     /**
      * @brief Destructor
      */
-    ~PoseGraphOptimizerCeres();
+    ~PoseGraphOptimizer();
     
     /**
      * @brief Add a keyframe pose to the pose graph

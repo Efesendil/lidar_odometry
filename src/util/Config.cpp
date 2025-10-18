@@ -329,12 +329,6 @@ bool ConfigManager::load_from_file(const std::string& config_file) {
         if (config_map.find("pose_graph_optimization.enable_pgo") != config_map.end()) {
             m_config.pgo_enable_pgo = (config_map["pose_graph_optimization.enable_pgo"] == "true");
         }
-        if (config_map.find("pose_graph_optimization.use_ceres") != config_map.end()) {
-            m_config.pgo_use_ceres = (config_map["pose_graph_optimization.use_ceres"] == "true");
-        }
-        if (config_map.find("pose_graph_optimization.use_full_pgo") != config_map.end()) {
-            m_config.pgo_use_full_pgo = (config_map["pose_graph_optimization.use_full_pgo"] == "true");
-        }
         if (config_map.find("pose_graph_optimization.odometry_translation_noise") != config_map.end()) {
             m_config.pgo_odometry_translation_noise = std::stod(config_map["pose_graph_optimization.odometry_translation_noise"]);
         }

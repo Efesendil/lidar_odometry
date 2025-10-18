@@ -121,8 +121,6 @@ struct SystemConfig {
     
     // ===== Pose Graph Optimization (PGO) =====
     bool pgo_enable_pgo = true;                     ///< Enable pose graph optimization
-    bool pgo_use_ceres = true;                      ///< Use Ceres optimizer (false = GTSAM)
-    bool pgo_use_full_pgo = true;                   ///< true: full PGO, false: partial PGO (constant optimized keyframes)
     double pgo_odometry_translation_noise = 0.5;    ///< Odometry constraint translation noise (lower = more trust)
     double pgo_odometry_rotation_noise = 0.5;       ///< Odometry constraint rotation noise (lower = more trust)
     double pgo_loop_translation_noise = 1.0;        ///< Loop closure constraint translation noise (lower = more trust)

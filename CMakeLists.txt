@@ -55,9 +55,6 @@ set(PROVIDE_UNINSTALL_TARGET OFF CACHE BOOL "Disable Ceres uninstall target" FOR
 set(CMAKE_DISABLE_FIND_PACKAGE_Ceres ON)
 add_subdirectory(${CERES_DIR} ${CMAKE_BINARY_DIR}/ceres EXCLUDE_FROM_ALL)
 
-# Find GTSAM
-find_package(GTSAM REQUIRED PATHS ${THIRDPARTY_DIR}/gtsam/build NO_DEFAULT_PATH)
-
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
@@ -71,7 +68,6 @@ include_directories(
     ${THIRDPARTY_DIR}/nanoflann/include
     ${THIRDPARTY_DIR}/LidarIris
     ${OpenCV_INCLUDE_DIRS}
-    ${GTSAM_INCLUDE_DIR}
 )
 
 # Common source files for all executables
@@ -82,7 +78,6 @@ set(COMMON_SOURCES
     # Processing module
     src/processing/FeatureExtractor.cpp
     src/processing/Estimator.cpp
-    src/processing/DualFrameICPOptimizer.cpp
     src/processing/LoopClosureDetector.cpp
     
     # Third-party
@@ -93,8 +88,8 @@ set(COMMON_SOURCES
     src/optimization/Parameters.cpp
     src/optimization/Factors.cpp
     src/optimization/AdaptiveMEstimator.cpp
-    src/optimization/PoseGraphOptimizerGTSAM.cpp
-    src/optimization/PoseGraphOptimizerCeres.cpp
+    src/optimization/PoseGraphOptimizer.cpp
+    src/optimization/IterativeClosestPointOptimizer.cpp
     
     # Viewer module
     src/viewer/PangolinViewer.cpp
@@ -146,7 +141,6 @@ target_link_libraries(kitti_lidar_odometry
     pango_core
     pango_image
     ${OpenCV_LIBS}
-    gtsam
     m  # Math library for M_PI
     stdc++fs  # For std::filesystem
 )
@@ -164,7 +158,6 @@ target_link_libraries(mid360_lidar_odometry
     pango_core
     pango_image
     ${OpenCV_LIBS}
-    gtsam
     m  # Math library for M_PI
     stdc++fs  # For std::filesystem
 )

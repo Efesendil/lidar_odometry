@@ -164,67 +164,13 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
             std::filesystem::create_directories(sys_config.output_directory);
             
             save_trajectory_kitti_format(context, kitti_output_path);
+
+            spdlog::info("[KittiPlayer] Saved trajectory to: {}", kitti_output_path);
             
             // GT evaluation disabled - use EVO tool for evaluation instead
         }
         
-        // 7. Calculate final statistics
-        result.success = true;
-        result.processed_frames = context.processed_frames;
-        if (!result.frame_processing_times.empty()) {
-            result.average_processing_time_ms = std::accumulate(
-                result.frame_processing_times.begin(), 
-                result.frame_processing_times.end(), 0.0) / result.frame_processing_times.size();
-        }
-        
-        spdlog::info("[KittiPlayer] Successfully processed {} frames", result.processed_frames);
-        
-        // Get ICP statistics from estimator
-        double avg_icp_iterations, avg_icp_time_ms;
-        m_estimator->get_optimization_statistics(avg_icp_iterations, avg_icp_time_ms);
-        
-        spdlog::info("[KittiPlayer] ICP Statistics:");
-        spdlog::info("  - Average iterations per ICP: {:.2f}", avg_icp_iterations);
-        spdlog::info("  - Average time per ICP: {:.2f} ms", avg_icp_time_ms);
-        
-        // Generate output path for display
-        std::string display_output_path = "";
-        if (config.enable_statistics) {
-            const auto& sys_config = util::config();
-            std::string seq_method_filename = sys_config.kitti_sequence + "_" + sys_config.scale_method + ".txt";
-            display_output_path = sys_config.output_directory + "/" + seq_method_filename;
-        }
-        
-        // Display final statistics summary
-        if (config.enable_console_statistics && result.success) {
-            spdlog::info("════════════════════════════════════════════════════════════════════");
-            spdlog::info("                          KITTI STATISTICS                          ");
-            spdlog::info("════════════════════════════════════════════════════════════════════");
-            spdlog::info(" Total Frames Processed: {}", result.processed_frames);
-            spdlog::info(" Average Processing Time: {:.2f}ms", result.average_processing_time_ms);
-            double fps = 1000.0 / result.average_processing_time_ms;
-            spdlog::info(" Average Frame Rate: {:.1f}fps", fps);
-            
-            // Calculate and display trajectory errors (Python script style)
-            if (config.enable_statistics && !display_output_path.empty()) {
-                try {
-                    auto errors = calculate_trajectory_errors(display_output_path);
-                    spdlog::info("════════════════════════════════════════════════════════════════════");
-                    spdlog::info("                         EVALUATION RESULTS                         ");
-                    spdlog::info("════════════════════════════════════════════════════════════════════");
-                    spdlog::info(" Translation Error: {:.2f}%", errors.translation_error * 100);
-                    spdlog::info(" Rotation Error:    {:.2f} deg/100m", errors.rotation_error / M_PI * 180 * 100);
-                    spdlog::info("════════════════════════════════════════════════════════════════════");
-                } catch (const std::exception& e) {
-                    spdlog::warn(" Could not calculate trajectory errors: {}", e.what());
-                }
-            }
-            
-            if (!display_output_path.empty()) {
-                spdlog::info(" Trajectory saved as: {}", display_output_path);
-                spdlog::info("════════════════════════════════════════════════════════════════════");
-            }
-        }
+       
         
         // Wait for viewer finish if enabled
         if (viewer) {
