@@ -30,6 +30,12 @@
 #include <vector>
 #include <map>
 #include <deque>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <optional>
+#include <chrono>
 
 namespace lidar_odometry {
 namespace processing {
@@ -216,7 +222,39 @@ private:
      */
     void rebuild_current_keyframe_local_map();
 
-    
+    /**
+     * @brief Background thread function for loop detection and PGO
+     * Runs continuously, waiting for loop queries and performing PGO when loops are detected
+     */
+    void loop_pgo_thread_function();
+
+    /**
+     * @brief Apply pending PGO result from background thread (called in main thread)
+     * Checks if there's a pending result and applies it to all keyframes
+     */
+    void apply_pending_pgo_result_if_available();
+
+    /**
+     * @brief Propagate poses to keyframes added after PGO using relative transforms
+     * @param last_optimized_kf_id Last keyframe ID included in PGO
+     */
+    void propagate_poses_after_pgo(int last_optimized_kf_id);
+
+    /**
+     * @brief Transform current keyframe's map using correction transform
+     * @param correction Correction transform to apply
+     */
+    void transform_current_keyframe_map(const SE3f& correction);
+
+    /**
+     * @brief Run PGO for detected loop closure in background thread
+     * @param current_keyframe Current keyframe where loop was detected
+     * @param loop_candidates List of loop closure candidates
+     * @return True if PGO succeeded
+     */
+    bool run_pgo_for_loop(std::shared_ptr<database::LidarFrame> current_keyframe,
+                         const std::vector<LoopCandidate>& loop_candidates);
+
     
 
 private:
@@ -252,6 +290,29 @@ private:
     std::shared_ptr<optimization::PoseGraphOptimizer> m_pose_graph_optimizer;
     int m_last_successful_loop_keyframe_id;  // Last keyframe ID where loop closure succeeded
     std::map<int, SE3f> m_optimized_poses;  // Optimized poses from PGO (for debugging visualization)
+    
+    // Asynchronous loop detection and PGO
+    std::thread m_loop_pgo_thread;                      // Background thread for loop+PGO
+    std::atomic<bool> m_thread_running{true};           // Thread control flag
+    std::atomic<bool> m_pgo_in_progress{false};         // PGO status flag
+    
+    // Query queue: Main thread → Background thread
+    std::mutex m_query_mutex;
+    std::deque<int> m_loop_query_queue;                 // Keyframe IDs to check for loops
+    std::condition_variable m_query_cv;                 // Wake up background thread
+    
+    // Result queue: Background thread → Main thread
+    std::mutex m_result_mutex;
+    struct PGOResult {
+        int last_optimized_kf_id;                        // Last keyframe ID optimized by PGO
+        std::map<int, SE3f> optimized_poses;             // Optimized absolute poses
+        SE3f last_kf_correction;                         // Correction transform for last keyframe
+        std::chrono::steady_clock::time_point timestamp; // When PGO completed
+    };
+    std::optional<PGOResult> m_pending_result;           // Pending PGO result to apply
+    
+    // Keyframe protection
+    std::mutex m_keyframes_mutex;                        // Protects m_keyframes deque
     
     // Loop closure storage
     struct LoopConstraint {
