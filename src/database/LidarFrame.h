@@ -103,9 +103,32 @@ public:
     
     /**
      * @brief Get current pose (world frame)
+     * Dynamic calculation: if keyframe, return m_pose; else return prev_keyframe->pose * m_relative_pose
      * @return SE3 pose in world coordinates
      */
-    const SE3f& get_pose() const { return m_pose; }
+    SE3f get_pose() const;
+    
+    /**
+     * @brief Get stored pose (for keyframes only, returns actual stored value)
+     * @return Reference to stored SE3 pose
+     */
+    const SE3f& get_stored_pose() const { return m_pose; }
+    
+    /**
+     * @brief Set previous keyframe (for non-keyframes to compute pose dynamically)
+     * @param prev_kf Shared pointer to previous keyframe
+     */
+    void set_previous_keyframe(std::shared_ptr<LidarFrame> prev_kf) { 
+        m_previous_keyframe = prev_kf; 
+    }
+    
+    /**
+     * @brief Get previous keyframe
+     * @return Shared pointer to previous keyframe
+     */
+    std::shared_ptr<LidarFrame> get_previous_keyframe() const { 
+        return m_previous_keyframe.lock(); 
+    }
     
     /**
      * @brief Set relative pose (to previous frame)
@@ -207,6 +230,11 @@ public:
      */
     PointCloudPtr get_local_map() { return m_local_map; }
     PointCloudConstPtr get_local_map() const { return m_local_map; }
+    
+    /**
+     * @brief Clear local map to free memory
+     */
+    void clear_local_map();
     
     // ===== KdTree Management =====
     
@@ -319,10 +347,13 @@ private:
     double m_timestamp;                // Frame timestamp
     
     // ===== Pose Data =====
-    SE3f m_pose;                       // Current pose in world frame
-    SE3f m_relative_pose;              // Relative pose to previous frame
+    SE3f m_pose;                       // Current pose in world frame (for keyframes) or cached pose
+    SE3f m_relative_pose;              // Relative pose to previous keyframe
     SE3f m_ground_truth_pose;          // Ground truth pose (for evaluation)
     SE3f m_initial_pose;               // Initial pose estimate (e.g., from other sensors)
+    
+    // ===== Frame Relationship =====
+    std::weak_ptr<LidarFrame> m_previous_keyframe;  // Previous keyframe (for pose computation)
     
     // ===== Point Cloud Data =====
     PointCloudPtr m_raw_cloud;         // Original point cloud

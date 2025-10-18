@@ -110,6 +110,23 @@ LidarFrame::LidarFrame(const LidarFrame& other)
 
 // ===== Pose Management =====
 
+SE3f LidarFrame::get_pose() const {
+    // If this is a keyframe, return the stored pose
+    if (is_keyframe()) {
+        return m_pose;
+    }
+    
+    // If this is a regular frame, compute pose from previous keyframe
+    auto prev_kf = m_previous_keyframe.lock();
+    if (prev_kf) {
+        // Pose = prev_keyframe_pose * relative_pose
+        return prev_kf->get_pose() * m_relative_pose;
+    }
+    
+    // Fallback: return stored pose (should not happen in normal operation)
+    return m_pose;
+}
+
 void LidarFrame::set_pose(const SE3f& pose) {
     m_pose = pose;
     
@@ -274,21 +291,20 @@ float LidarFrame::compute_distance_to(const LidarFrame& other) const {
 }
 
 void LidarFrame::build_local_map_kdtree() {
+
+
     if (!m_local_map || m_local_map->empty()) {
         spdlog::warn("[LidarFrame] Cannot build KdTree: local map is empty for frame {}", m_frame_id);
         m_local_map_kdtree_built = false;
         return;
     }
-    
-    if (!m_local_map_kdtree) {
-        m_local_map_kdtree = std::make_unique<util::KdTree>();
-    }
-    
+
+    m_local_map_kdtree = std::make_unique<util::KdTree>();
+
     m_local_map_kdtree->setInputCloud(m_local_map);
     m_local_map_kdtree_built = true;
     
-    spdlog::debug("[LidarFrame] Built KdTree for local map with {} points in frame {}", 
-                  m_local_map->size(), m_frame_id);
+
 }
 
 void LidarFrame::clear_local_map_kdtree() {
@@ -296,6 +312,14 @@ void LidarFrame::clear_local_map_kdtree() {
         m_local_map_kdtree.reset();
         m_local_map_kdtree_built = false;
         spdlog::debug("[LidarFrame] Cleared KdTree for frame {}", m_frame_id);
+    }
+}
+
+void LidarFrame::clear_local_map() {
+    if (m_local_map) {
+        m_local_map->clear();
+        m_local_map.reset();
+        spdlog::debug("[LidarFrame] Cleared local map for frame {}", m_frame_id);
     }
 }
 

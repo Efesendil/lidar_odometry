@@ -117,11 +117,10 @@ public:
                                 PointCloudConstPtr post_icp_cloud);
     
     /**
-     * @brief Add keyframe for visualization
-     * @param keyframe_pose Keyframe pose in world coordinates
-     * @param keyframe_id Unique ID for the keyframe
+     * @brief Add keyframe for visualization (uses get_pose() for dynamic update)
+     * @param keyframe Frame object to add as keyframe
      */
-    void add_keyframe(const Matrix4f& keyframe_pose, int keyframe_id);
+    void add_keyframe(std::shared_ptr<database::LidarFrame> keyframe);
     
     /**
      * @brief Clear all keyframes
@@ -129,16 +128,16 @@ public:
     void clear_keyframes();
     
     /**
-     * @brief Update last keyframe local map for visualization
-     * @param keyframe_map Last keyframe's local map points (world coordinates)
+     * @brief Update last keyframe for local map visualization
+     * @param last_keyframe Last keyframe pointer (will use get_local_map())
      */
-    void update_last_keyframe_map(PointCloudConstPtr keyframe_map);
+    void update_last_keyframe(std::shared_ptr<database::LidarFrame> last_keyframe);
     
     /**
-     * @brief Add pose to trajectory
-     * @param pose Pose to add to trajectory
+     * @brief Add frame to trajectory (will use get_pose() for dynamic update)
+     * @param frame Frame to add to trajectory
      */
-    void add_trajectory_pose(const Matrix4f& pose);
+    void add_trajectory_frame(std::shared_ptr<database::LidarFrame> frame);
     
     /**
      * @brief Update optimized trajectory from pose graph optimization
@@ -182,21 +181,17 @@ private:
     
     // ===== Data Storage =====
     std::shared_ptr<database::LidarFrame> m_current_frame;  ///< Current LiDAR frame
-    std::vector<Matrix4f> m_trajectory;                     ///< Estimated camera trajectory
+    std::vector<std::shared_ptr<database::LidarFrame>> m_trajectory_frames; ///< All frames for trajectory (use get_pose() for dynamic update)
     std::vector<Matrix4f> m_optimized_trajectory;           ///< PGO optimized trajectory (for debugging)
     
     // ===== Keyframe Data =====
-    struct KeyframeData {
-        Matrix4f pose;      ///< Keyframe pose in world coordinates
-        int id;             ///< Keyframe ID
-    };
-    std::vector<KeyframeData> m_keyframes;                  ///< Keyframe poses and IDs
+    std::vector<std::shared_ptr<database::LidarFrame>> m_keyframes; ///< Keyframe objects (use get_pose() for dynamic update)
     
     // ===== New Visualization Data =====
     PointCloudConstPtr m_map_cloud;                        ///< Map points (world coordinate) - Gray
     PointCloudConstPtr m_pre_icp_cloud;                    ///< Pre-ICP lidar features (world) - Blue  
     PointCloudConstPtr m_post_icp_cloud;                   ///< Post-ICP lidar features (world) - Red
-    PointCloudConstPtr m_last_keyframe_map;                ///< Last keyframe local map (world) - Large points
+    std::shared_ptr<database::LidarFrame> m_last_keyframe; ///< Last keyframe for local map visualization
     
     // ===== Thread Safety =====
     mutable std::mutex m_data_mutex;
@@ -296,6 +291,12 @@ private:
      * @param trajectory Vector of poses forming the trajectory
      */
     void draw_trajectory_with_data(const std::vector<Matrix4f>& trajectory);
+    
+    /**
+     * @brief Draw trajectory with frame objects (uses get_pose() for dynamic update)
+     * @param frames Vector of frames forming the trajectory
+     */
+    void draw_trajectory_with_frames(const std::vector<std::shared_ptr<database::LidarFrame>>& frames);
     
     /**
      * @brief Draw keyframes as coordinate axes

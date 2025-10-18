@@ -210,6 +210,12 @@ private:
      */
     void apply_pose_graph_optimization();
 
+    /**
+     * @brief Rebuild local map for current keyframe after loop closure
+     * Clears existing local map and rebuilds it from the updated global feature map
+     */
+    void rebuild_current_keyframe_local_map();
+
     
     
 
@@ -246,6 +252,16 @@ private:
     std::shared_ptr<optimization::PoseGraphOptimizerGTSAM> m_pose_graph_optimizer;
     int m_last_successful_loop_keyframe_id;  // Last keyframe ID where loop closure succeeded
     std::map<int, SE3f> m_optimized_poses;  // Optimized poses from PGO (for debugging visualization)
+    
+    // Loop closure storage (to reuse in every PGO)
+    struct LoopConstraint {
+        int from_keyframe_id;
+        int to_keyframe_id;
+        SE3f relative_pose;
+        double translation_noise;
+        double rotation_noise;
+    };
+    std::vector<LoopConstraint> m_loop_constraints;  // All detected loop closures
     
     // Last keyframe for optimization
     std::shared_ptr<database::LidarFrame> m_last_keyframe;

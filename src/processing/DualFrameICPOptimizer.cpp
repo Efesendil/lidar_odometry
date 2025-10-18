@@ -53,13 +53,22 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
     auto curr_keyframe_copy = std::make_shared<database::LidarFrame>(*curr_keyframe);
     auto matched_keyframe_copy = std::make_shared<database::LidarFrame>(*matched_keyframe);
 
-    // Let's build kd tree of local map of matched keyframe
-    matched_keyframe_copy->build_local_map_kdtree();
-
     Sophus::SE3f optimized_curr_pose = curr_keyframe_copy->get_pose();
 
     // Reset adaptive estimator
     m_adaptive_estimator->reset();
+
+    bool success = false;
+
+    // build kd tree of local map of matched keyframe
+
+    // set temp local map
+    auto local_feature_matched = get_frame_cloud(matched_keyframe_copy);     // matched frame feature cloud (local coordinates)
+    PointCloudPtr transformed_matched_cloud = std::make_shared<PointCloud>();
+
+    util::transform_point_cloud(local_feature_matched, transformed_matched_cloud, matched_keyframe_copy->get_pose().matrix());
+    matched_keyframe_copy->set_local_map(transformed_matched_cloud);
+    matched_keyframe_copy->build_local_map_kdtree();
 
     for(int icp_iter = 0; icp_iter < 100; ++icp_iter)
     {
@@ -134,8 +143,6 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
             }
         }
 
-        spdlog::warn("Check apaptive delta at iteration {}: delta = {:.6f}", icp_iter + 1, adpative_delta);
-
         // Add residual blocks (point-to-plane factors)
         for (size_t i = 0; i < correspondences.size(); ++i) {
             // Calculate normalization weight for residual
@@ -192,15 +199,24 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
         optimized_curr_pose = optimized_curr_pose_new;
 
 
+
+
         if(delta_norm_trans < m_config.translation_tolerance && delta_norm_so3 < m_config.rotation_tolerance)
         {
             // update optimized_relative_transform (from current_old to current_new)
             optimized_relative_transform = curr_keyframe->get_pose().inverse() * optimized_curr_pose;
-            return true;
+            success = true;
+            break;
         }
     }
 
-    return false;
+    // validate success
+
+    // match ratio
+    // 각각의 local feautre를 world coordinate로 변환 후 kd 트리 
+
+
+    return success;
 }
 
 
@@ -436,14 +452,7 @@ size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database
                                                         DualFrameCorrespondences &correspondences)
 {
     correspondences.clear();
-
-    auto local_feature_last = get_frame_cloud(last_keyframe);   // Last frame feature cloud (local coordinates)
-    
-
-    // transform local feature cloud to world coordinates
-    PointCloudPtr local_map_last(new util::PointCloud()); // not actually local map, but feature cloud in world coords
-    Eigen::Matrix4f T_wl_last = last_keyframe->get_pose().matrix(); // Last keyframe pose in world coordinates
-    util::transform_point_cloud(local_feature_last, local_map_last, T_wl_last); 
+    PointCloudPtr local_map_last = last_keyframe->get_local_map(); // Local map of last keyframe (world coordinates)
 
     auto local_feature_curr = get_frame_cloud(curr_keyframe);     // Current frame feature cloud (local coordinates)
 
@@ -454,9 +463,8 @@ size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database
         return 0;
     }
 
-    auto kdtree_last_ptr = std::make_shared<KdTree>();
-    kdtree_last_ptr->setInputCloud(local_map_last);
-    
+    auto kdtree_last_ptr = last_keyframe->get_local_map_kdtree();
+
     if(!kdtree_last_ptr) {
         spdlog::error("[DualFrameICPOptimizer] Last keyframe has no KdTree - this should not happen!");
         return 0;
@@ -468,6 +476,7 @@ size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database
 
     // Find correspondences: query CURR points, find neighbors in LAST cloud
 
+    Eigen::Matrix4f T_wl_last = last_keyframe->get_pose().matrix(); // Last keyframe pose in world coordinates
     Eigen::Matrix4f T_lw_last = T_wl_last.inverse(); // Inverse transform
     Eigen::Matrix4f T_wl_curr = curr_keyframe->get_pose().matrix(); // Current keyframe pose in world coordinates
     Eigen::Matrix4f T_lw_curr = T_wl_curr.inverse(); // Inverse transform
@@ -556,35 +565,6 @@ size_t DualFrameICPOptimizer::find_correspondences_loop(std::shared_ptr<database
         correspondences.residuals.push_back(distance);  
 
     }
-
-    // Log residual distribution statistics
-    // if (!correspondences.residuals.empty()) {
-    //     std::vector<double> residuals = correspondences.residuals;
-    //     std::sort(residuals.begin(), residuals.end());
-        
-    //     double sum = std::accumulate(residuals.begin(), residuals.end(), 0.0);
-    //     double mean = sum / residuals.size();
-        
-    //     double variance = 0.0;
-    //     for (double val : residuals) {
-    //         variance += (val - mean) * (val - mean);
-    //     }
-    //     variance /= residuals.size();
-    //     double std_dev = std::sqrt(variance);
-        
-    //     size_t n = residuals.size();
-    //     double median = (n % 2 == 0) ? (residuals[n/2-1] + residuals[n/2]) / 2.0 : residuals[n/2];
-    //     double min_val = residuals[0];
-    //     double max_val = residuals[n-1];
-    //     double q25 = residuals[n/4];
-    //     double q75 = residuals[3*n/4];
-        
-    //     spdlog::info("[DualFrameICPOptimizer] Loop closure residual distribution:");
-    //     spdlog::info("  Count: {}, Mean: {:.4f}, Std: {:.4f}, Median: {:.4f}", 
-    //                 n, mean, std_dev, median);
-    //     spdlog::info("  Min: {:.4f}, Q25: {:.4f}, Q75: {:.4f}, Max: {:.4f}", 
-    //                 min_val, q25, q75, max_val);
-    // }
 
     return correspondences.size();
 }

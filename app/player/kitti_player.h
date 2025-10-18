@@ -139,7 +139,8 @@ struct FrameContext {
     size_t frame_index = 0;
     double timestamp = 0.0;
     std::vector<Eigen::Matrix4f> gt_poses;
-    std::vector<Eigen::Matrix4f> estimated_poses;
+    std::vector<Eigen::Matrix4f> estimated_poses;  // Deprecated: use processed_frames_list instead
+    std::vector<std::shared_ptr<database::LidarFrame>> processed_frames_list; // Use get_pose() for dynamic updates
     Eigen::Matrix4f gt_to_estimated_transform = Eigen::Matrix4f::Identity();
     bool transform_initialized = false;
     

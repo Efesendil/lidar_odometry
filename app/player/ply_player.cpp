@@ -464,20 +464,20 @@ void PLYPlayer::update_viewer(viewer::PangolinViewer& viewer,
                              util::PointCloudPtr point_cloud) {
     if (context.estimated_poses.empty()) return;
     
-    // Update current pose
-    Eigen::Matrix4f current_pose = context.estimated_poses.back();
-    viewer.add_trajectory_pose(current_pose);
-    
     // Use the processed LidarFrame from context instead of creating a new one
     if (context.current_lidar_frame) {
         viewer.update_current_frame(context.current_lidar_frame);
+        // Add frame to trajectory for dynamic pose updates
+        viewer.add_trajectory_frame(context.current_lidar_frame);
     } else {
         spdlog::warn("[PLYPlayer] No processed LidarFrame available in context");
         // Fallback: create new frame with estimated pose
+        Eigen::Matrix4f current_pose = context.estimated_poses.back();
         auto lidar_frame = std::make_shared<database::LidarFrame>(context.frame_index, context.timestamp, point_cloud);
         Sophus::SE3f se3_pose(current_pose);
         lidar_frame->set_pose(se3_pose);
         viewer.update_current_frame(lidar_frame);
+        viewer.add_trajectory_frame(lidar_frame);
     }
     
     // Update map points from estimator
@@ -494,18 +494,17 @@ void PLYPlayer::update_viewer(viewer::PangolinViewer& viewer,
             for (size_t i = m_last_keyframe_count; i < current_keyframe_count; ++i) {
                 auto keyframe = m_estimator->get_keyframe(i);
                 if (keyframe) {
-                    viewer.add_keyframe(keyframe->get_pose().matrix(), 
-                                       static_cast<int>(keyframe->get_frame_id()));
+                    viewer.add_keyframe(keyframe);
                     spdlog::debug("[PLYPlayer] Added keyframe {} to viewer", keyframe->get_frame_id());
                 }
             }
             m_last_keyframe_count = current_keyframe_count;
         }
         
-        // Update last keyframe map for visualization
-        auto last_keyframe_map = m_estimator->get_last_keyframe_map();
-        if (last_keyframe_map && !last_keyframe_map->empty()) {
-            viewer.update_last_keyframe_map(last_keyframe_map);
+        // Update last keyframe for local map visualization
+        auto last_keyframe = m_estimator->get_keyframe(m_estimator->get_keyframe_count() - 1);
+        if (last_keyframe) {
+            viewer.update_last_keyframe(last_keyframe);
         }
         
         // Update ICP debug clouds if available

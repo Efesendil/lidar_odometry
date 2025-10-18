@@ -143,6 +143,14 @@ bool Estimator::process_frame(std::shared_ptr<database::LidarFrame> current_fram
     current_frame->set_pose(m_T_wl_current);
     m_trajectory.push_back(m_T_wl_current);
     
+    // Set previous keyframe reference for dynamic pose calculation
+    if (m_last_keyframe) {
+        current_frame->set_previous_keyframe(m_last_keyframe);
+        // Calculate and store relative pose from keyframe to current frame
+        SE3f relative_pose = m_last_keyframe->get_stored_pose().inverse() * m_T_wl_current;
+        current_frame->set_relative_pose(relative_pose);
+    }
+    
     // Step 6: Check for keyframe creation
     if (should_create_keyframe(m_T_wl_current)) {
         // Transform feature cloud to world coordinates for keyframe storage
@@ -167,6 +175,10 @@ void Estimator::initialize_first_frame(std::shared_ptr<database::LidarFrame> fra
     m_velocity = SE3f();      // Identity velocity
     frame->set_pose(m_T_wl_current);
     m_trajectory.push_back(m_T_wl_current);
+    
+    // First frame has no previous keyframe (it will become the first keyframe)
+    frame->set_previous_keyframe(nullptr);
+    frame->set_relative_pose(SE3f());  // Identity relative pose
 
     // Get feature cloud from preprocessed frame
     auto feature_cloud = frame->get_feature_cloud();
@@ -345,64 +357,57 @@ void Estimator::create_keyframe(std::shared_ptr<database::LidarFrame> frame)
         }
     }
 
-    // Add to feature map
-    if (m_feature_map && global_feature_cloud) {
-        // First downsample the new features before adding to map
-        util::VoxelGrid new_feature_filter;
-        float map_voxel_size = static_cast<float>(m_config.map_voxel_size);
-        new_feature_filter.setLeafSize(map_voxel_size);
-        new_feature_filter.setInputCloud(global_feature_cloud);
-        
-        PointCloudPtr downsampled_new_features = std::make_shared<PointCloud>();
-        new_feature_filter.filter(*downsampled_new_features);
-        
-        // Add downsampled new features to map
-        *m_feature_map += *downsampled_new_features;
-        
-        spdlog::debug("[Estimator] Added {} -> {} downsampled points to feature map", 
-                      global_feature_cloud->size(), downsampled_new_features->size());
+    // Build local map by accumulating last keyframe's local map + current global features
+    PointCloudPtr accumulated_map = std::make_shared<util::PointCloud>();
+    
+    // Add last keyframe's local map if it exists
+    if (m_last_keyframe && m_last_keyframe->get_local_map()) {
+        *accumulated_map += *m_last_keyframe->get_local_map();
+        spdlog::debug("[Estimator] Added {} points from last keyframe's local map", 
+                      m_last_keyframe->get_local_map()->size());
+    }
+    
+    // Add current keyframe's global features
+    if (global_feature_cloud) {
+        *accumulated_map += *global_feature_cloud;
+        spdlog::debug("[Estimator] Added {} points from current global features", 
+                      global_feature_cloud->size());
     } else {
-        spdlog::error("[Estimator] Null pointer in feature map addition!");
+        spdlog::error("[Estimator] Null global feature cloud!");
         return;
     }
-
-    // Apply voxel grid downsampling to entire map every keyframe
-    PointCloudPtr processed_feature_map = m_feature_map;
     
+    // Downsample the accumulated map
     util::VoxelGrid map_voxel_filter;
     float map_voxel_size = static_cast<float>(m_config.map_voxel_size);
     map_voxel_filter.setLeafSize(map_voxel_size);
-    map_voxel_filter.setInputCloud(m_feature_map);
-
-    auto new_feature_map = std::make_shared<util::PointCloud>();
-    map_voxel_filter.filter(*new_feature_map);
+    map_voxel_filter.setInputCloud(accumulated_map);
     
-    spdlog::debug("[Estimator] Resampled entire map: {} -> {} points", 
-                  m_feature_map->size(), new_feature_map->size());
+    auto downsampled_map = std::make_shared<util::PointCloud>();
+    map_voxel_filter.filter(*downsampled_map);
     
-    processed_feature_map = new_feature_map;
-
+    spdlog::debug("[Estimator] Downsampled accumulated map: {} -> {} points", 
+                  accumulated_map->size(), downsampled_map->size());
+    
     // Apply radius-based filtering around current pose (LiDAR circular pattern)
     Eigen::Vector3f current_position = frame->get_pose().translation();
     float filter_radius = static_cast<float>(m_config.max_range * 1.2);
     
-    auto filtered_feature_map = std::make_shared<util::PointCloud>();
-    filtered_feature_map->reserve(processed_feature_map->size());
+    auto filtered_local_map = std::make_shared<util::PointCloud>();
+    filtered_local_map->reserve(downsampled_map->size());
     
     // Filter points within radius from current position
-    for (const auto& point : *processed_feature_map) {
+    for (const auto& point : *downsampled_map) {
         Eigen::Vector3f point_pos(point.x, point.y, point.z);
         float distance = (point_pos - current_position).norm();
         
         if (distance <= filter_radius) {
-            filtered_feature_map->push_back(point);
+            filtered_local_map->push_back(point);
         }
     }
     
-    // Store current local map in keyframe for DualFrameICPOptimizer
-    auto local_map_copy = std::make_shared<util::PointCloud>();
-    *local_map_copy = *filtered_feature_map;  // Copy the local map at keyframe creation time
-    frame->set_local_map(local_map_copy);
+    // Store filtered local map in keyframe for DualFrameICPOptimizer
+    frame->set_local_map(filtered_local_map);
     
     // Build KdTree for the local map at keyframe creation
     frame->build_local_map_kdtree();
@@ -413,16 +418,13 @@ void Estimator::create_keyframe(std::shared_ptr<database::LidarFrame> frame)
         spdlog::debug("[Estimator] Cleared kdtree for previous keyframe {}", m_last_keyframe->get_keyframe_id());
     }
     
-    // Update global feature map
-    m_feature_map = processed_feature_map;
-    
     // Update last keyframe reference for optimization
     m_last_keyframe = frame;
 
     m_last_keyframe_pose = m_last_keyframe->get_pose();
     
-    spdlog::debug("[Estimator] Keyframe created: input={} -> local_map={} points, global_map={} points", 
-                  global_feature_cloud->size(), local_map_copy->size(), m_feature_map->size());
+    spdlog::debug("[Estimator] Keyframe created: input={} -> local_map={} points", 
+                  global_feature_cloud->size(), filtered_local_map->size());
     
     // Loop closure detection
     if (m_loop_detector && m_config.loop_enable_loop_detection) {
@@ -655,6 +657,13 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
     
     // Build pose graph from scratch with all keyframes and odometry constraints
     if (m_pose_graph_optimizer) {
+        // Store pre-PGO poses for visualization (before optimization)
+        std::map<int, SE3f> pre_pgo_poses;
+        for (const auto& kf : m_keyframes) {
+            // Use get_stored_pose() to get the actual stored value, not dynamic calculation
+            pre_pgo_poses[kf->get_keyframe_id()] = kf->get_stored_pose();
+        }
+        
         // Clear previous graph
         m_pose_graph_optimizer->clear();
         
@@ -668,14 +677,14 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
                 // First keyframe: add with prior factor
                 m_pose_graph_optimizer->add_keyframe_pose(
                     kf->get_keyframe_id(),
-                    kf->get_pose(),
+                    pre_pgo_poses[kf->get_keyframe_id()],  // Use pre-PGO pose
                     true  // is_first_keyframe
                 );
             } else {
                 // Non-first keyframe: add pose
                 m_pose_graph_optimizer->add_keyframe_pose(
                     kf->get_keyframe_id(),
-                    kf->get_pose(),
+                    pre_pgo_poses[kf->get_keyframe_id()],  // Use pre-PGO pose
                     false  // not first keyframe
                 );
                 
@@ -695,18 +704,33 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
         
     
         
-        // Add loop closure constraint to pose graph
-        // T_matched_to_current is the relative pose from matched to current
-        m_pose_graph_optimizer->add_loop_closure_constraint(
-            matched_keyframe->get_keyframe_id(),  // from (older keyframe)
-            current_keyframe->get_keyframe_id(),  // to (current keyframe)
-            T_matched_to_current,  // relative pose from matched to current
-            0.01,  // translation noise (tight constraint for loop)
-            0.01   // rotation noise
-        );
+        // Store loop closure constraint for future PGO runs
+        LoopConstraint loop_constraint;
+        loop_constraint.from_keyframe_id = matched_keyframe->get_keyframe_id();
+        loop_constraint.to_keyframe_id = current_keyframe->get_keyframe_id();
+        loop_constraint.relative_pose = T_matched_to_current;
+        loop_constraint.translation_noise = 0.01;
+        loop_constraint.rotation_noise = 0.01;
+        m_loop_constraints.push_back(loop_constraint);
+        
+        spdlog::info("[Estimator] Stored loop closure constraint: {} -> {} (total loops: {})",
+                     loop_constraint.from_keyframe_id, loop_constraint.to_keyframe_id, 
+                     m_loop_constraints.size());
+        
+        // Add ALL loop closure constraints to pose graph
+        for (const auto& lc : m_loop_constraints) {
+            m_pose_graph_optimizer->add_loop_closure_constraint(
+                lc.from_keyframe_id,
+                lc.to_keyframe_id,
+                lc.relative_pose,
+                lc.translation_noise,
+                lc.rotation_noise
+            );
+        }
         
         // Perform pose graph optimization with GTSAM
-        spdlog::info("[Estimator] Running GTSAM pose graph optimization...");
+        spdlog::info("[Estimator] Running GTSAM pose graph optimization with {} loop closures...", 
+                     m_loop_constraints.size());
         bool opt_success = m_pose_graph_optimizer->optimize();
         
         if (opt_success) {
@@ -793,9 +817,6 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
                     float total_cost_before = odom_cost_before + loop_cost_before;
                     float total_cost_after = odom_cost_after + loop_cost_after;
                     
-                    spdlog::info("[Estimator]   KF {}: Δt={:.3f}m, Δr={:.2f}°, cost {:.2f}->{:.2f}", 
-                               kf_id, translation_diff, rotation_diff, 
-                               total_cost_before, total_cost_after);
                 }
             }
             
@@ -803,11 +824,9 @@ void Estimator::process_loop_closures(std::shared_ptr<database::LidarFrame> curr
                 avg_translation_diff /= count;
                 avg_rotation_diff /= count;
                 
-                spdlog::info("[Estimator] ========== PGO Statistics ==========");
-                spdlog::info("[Estimator] Average correction: Δt={:.3f}m, Δr={:.2f}°", 
-                           avg_translation_diff, avg_rotation_diff);
-                spdlog::info("[Estimator] Maximum correction: Δt={:.3f}m, Δr={:.2f}°", 
-                           max_translation_diff, max_rotation_diff);
+                spdlog::info("[Estimator] ========== PGO Statistics =========="); 
+                spdlog::info("[Estimator] Average correction: Δt={:.3f}m, Δr={:.2f}°", avg_translation_diff, avg_rotation_diff);
+                spdlog::info("[Estimator] Maximum correction: Δt={:.3f}m, Δr={:.2f}°", max_translation_diff, max_rotation_diff);
             }
             
             spdlog::info("[Estimator] =========================================");
@@ -848,6 +867,12 @@ void Estimator::apply_pose_graph_optimization() {
     }
     
     spdlog::info("[Estimator] Applying PGO results to {} keyframes", optimized_poses.size());
+
+    auto last_keyframe = m_keyframes.back();
+
+    Sophus::SE3f last_keyframe_pose_before_opt = last_keyframe->get_pose();
+    Sophus::SE3f last_keyframe_pose_after_opt = optimized_poses[last_keyframe->get_keyframe_id()];
+    Sophus::SE3f total_correction = last_keyframe_pose_after_opt * last_keyframe_pose_before_opt.inverse();
     
     // Update all keyframe poses and their associated point clouds
     for (auto& keyframe : m_keyframes) {
@@ -874,46 +899,27 @@ void Estimator::apply_pose_graph_optimization() {
         
         // Update keyframe pose
         keyframe->set_pose(new_pose);
-        
-        // Note: Local map is in keyframe's local coordinate, no need to update
-        // Only global feature cloud (in world coordinate) needs to be transformed
-        
-        // Transform and update global feature cloud
-        auto global_features = keyframe->get_feature_cloud_global();
-        if (global_features && !global_features->empty()) {
-            auto corrected_global_features = std::make_shared<util::PointCloud>();
-            util::transform_point_cloud(global_features, corrected_global_features, correction_matrix);
-            keyframe->set_feature_cloud_global(corrected_global_features);
-        }
+      
     }
-    
-    // Rebuild the global feature map from all corrected keyframes
-    m_feature_map->clear();
-    
-    for (const auto& keyframe : m_keyframes) {
-        auto global_features = keyframe->get_feature_cloud_global();
-        if (global_features && !global_features->empty()) {
-            *m_feature_map += *global_features;
-        }
-    }
-    
-    // Downsample the rebuilt feature map
-    util::VoxelGrid map_voxel_filter;
-    float map_voxel_size = static_cast<float>(m_config.map_voxel_size);
-    map_voxel_filter.setLeafSize(map_voxel_size);
-    map_voxel_filter.setInputCloud(m_feature_map);
-    
-    auto downsampled_map = std::make_shared<util::PointCloud>();
-    map_voxel_filter.filter(*downsampled_map);
-    m_feature_map = downsampled_map;
-    
-    // Update last keyframe pose
-    if (!m_keyframes.empty()) {
-        m_last_keyframe_pose = m_keyframes.back()->get_pose();
-    }
-    
-    spdlog::info("[Estimator] PGO applied successfully! Global map has {} points", m_feature_map->size());
+
+    // transform last keyframe's local map
+    auto last_local_map = last_keyframe->get_local_map();
+
+    util::PointCloudPtr transformed_local_map = std::make_shared<util::PointCloud>();
+
+    util::transform_point_cloud(
+        last_local_map,
+        transformed_local_map,
+        total_correction.matrix()
+    );
+
+    // Update last keyframe's local map
+    last_keyframe->set_local_map(transformed_local_map);
+    last_keyframe->build_local_map_kdtree();
 }
+    
+
+    
 
 
 } // namespace processing

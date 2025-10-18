@@ -174,7 +174,7 @@ bool PoseGraphOptimizerGTSAM::optimize() {
     
     // Optimize using Levenberg-Marquardt
     gtsam::LevenbergMarquardtParams params;
-    params.setVerbosity("ERROR");  // Suppress GTSAM output
+    params.setVerbosity("SILENT");  // Completely suppress GTSAM output
     params.setMaxIterations(100);
     params.setRelativeErrorTol(1e-5);
     params.setAbsoluteErrorTol(1e-5);
