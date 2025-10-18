@@ -45,7 +45,8 @@ DualFrameICPOptimizer::DualFrameICPOptimizer(const ICPConfig& config,
 
 bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> curr_keyframe,
                                           std::shared_ptr<database::LidarFrame> matched_keyframe,
-                                          Sophus::SE3f &optimized_relative_transform)
+                                          Sophus::SE3f &optimized_relative_transform,
+                                          float& inlier_ratio)
 {
 
 
@@ -210,11 +211,36 @@ bool DualFrameICPOptimizer::optimize_loop(std::shared_ptr<database::LidarFrame> 
         }
     }
 
-    // validate success
-
-    // match ratio
-    // 각각의 local feautre를 world coordinate로 변환 후 kd 트리 
-
+    // Calculate inlier ratio for validation
+    if (success) {
+        // Update current keyframe pose to optimized pose
+        curr_keyframe_copy->set_pose(optimized_curr_pose);
+        
+        // Find final correspondences with optimized pose
+        DualFrameCorrespondences final_correspondences;
+        size_t num_final_correspondences = find_correspondences_loop(matched_keyframe_copy, curr_keyframe_copy, final_correspondences);
+        
+        // Calculate inlier ratio based on correspondence quality
+        size_t num_inliers = 0;
+        const double inlier_distance_threshold = m_config.max_correspondence_distance;
+        
+        for (size_t i = 0; i < final_correspondences.size(); ++i) {
+            if (final_correspondences.residuals[i] < inlier_distance_threshold) {
+                num_inliers++;
+            }
+        }
+        
+        // Get total number of source points
+        auto curr_local_features = get_frame_cloud(curr_keyframe_copy);
+        size_t total_points = curr_local_features->size();
+        
+        inlier_ratio = (total_points > 0) ? static_cast<float>(num_inliers) / static_cast<float>(total_points) : 0.0f;
+        
+        spdlog::debug("[DualFrameICP] Loop ICP inlier ratio: {:.2f}% ({}/{})", 
+                     inlier_ratio * 100.0f, num_inliers, total_points);
+    } else {
+        inlier_ratio = 0.0f;
+    }
 
     return success;
 }

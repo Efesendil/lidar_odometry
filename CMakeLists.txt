@@ -93,8 +93,8 @@ set(COMMON_SOURCES
     src/optimization/Parameters.cpp
     src/optimization/Factors.cpp
     src/optimization/AdaptiveMEstimator.cpp
-    src/optimization/PoseGraphOptimizer.cpp
     src/optimization/PoseGraphOptimizerGTSAM.cpp
+    src/optimization/PoseGraphOptimizerCeres.cpp
     
     # Viewer module
     src/viewer/PangolinViewer.cpp

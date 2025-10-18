@@ -206,32 +206,42 @@ bool RelativePoseFactor::Evaluate(double const* const* parameters,
         // Convert error to tangent space (log map)
         Eigen::Vector6d error_tangent = T_error.log();
         
-        // Apply square root of information matrix
+        // Apply square root of information matrix for weighting
+        // NOTE: Ceres expects residual in the form: sqrt(Information) * error
+        // The information matrix is already set correctly (inverse of covariance)
         Eigen::LLT<Eigen::Matrix<double, 6, 6>> llt(m_information_matrix);
         Eigen::Matrix<double, 6, 6> sqrt_info = llt.matrixL();
         
-        // Weighted residual
+        // Weighted residual: sqrt_info scales the error by sqrt(weight)
+        // This is the standard way in Ceres to incorporate information matrix
         Eigen::Map<Eigen::Vector6d> residual_map(residuals);
         residual_map = sqrt_info * error_tangent * m_robust_weight;
         
         // Compute Jacobians if requested
         if (jacobians) {
-            // Compute right Jacobian inverse for error
+            // Compute right Jacobian inverse for error (Logmap derivative)
             Eigen::Matrix<double, 6, 6> Jr_inv = right_jacobian_inverse(error_tangent);
+            
+            // Compute relative transformation (Between operation result)
+            // T_relative = T_i^(-1) * T_j
+            Sophus::SE3d T_relative = T_i.inverse() * T_j;
             
             // Jacobian w.r.t. pose i (parameters[0])
             if (jacobians[0]) {
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> jac_i(jacobians[0]);
                 
-                // J_i = sqrt_info * Jr_inv * (-Adjoint(T_j^(-1))) * m_robust_weight
-                jac_i = sqrt_info * Jr_inv * (-T_j.inverse().Adj()) * m_robust_weight;
+                // Correct Jacobian: J_i = sqrt_info * Jr_inv * (-Adjoint(T_relative^(-1))) * m_robust_weight
+                // This matches GTSAM's: H1 = -D_v_h * h.inverse().AdjointMap()
+                // where h = T_i^(-1) * T_j and D_v_h is the Logmap derivative (Jr_inv)
+                jac_i = sqrt_info * Jr_inv * (-T_relative.inverse().Adj()) * m_robust_weight;
             }
             
             // Jacobian w.r.t. pose j (parameters[1])
             if (jacobians[1]) {
                 Eigen::Map<Eigen::Matrix<double, 6, 6, Eigen::RowMajor>> jac_j(jacobians[1]);
                 
-                // J_j = sqrt_info * Jr_inv * m_robust_weight
+                // J_j = sqrt_info * Jr_inv * I * m_robust_weight
+                // This matches GTSAM's: H2 = D_v_h (identity is absorbed in between operation)
                 jac_j = sqrt_info * Jr_inv * m_robust_weight;
             }
             

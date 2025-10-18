@@ -92,7 +92,7 @@ set(LIDAR_ODOMETRY_SOURCES
     optimization/Parameters.cpp
     optimization/Factors.cpp
     optimization/AdaptiveMEstimator.cpp
-    optimization/PoseGraphOptimizer.cpp
+    optimization/PoseGraphOptimizerCeres.cpp
     
     # Viewer module
     viewer/PangolinViewer.cpp

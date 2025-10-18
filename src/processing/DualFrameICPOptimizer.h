@@ -102,7 +102,8 @@ public:
     
     bool optimize_loop(std::shared_ptr<database::LidarFrame> curr_keframe,
                  std::shared_ptr<database::LidarFrame> matched_keyframe,
-                 Sophus::SE3f& optimized_relative_transform);
+                 Sophus::SE3f& optimized_relative_transform,
+                 float& inlier_ratio);
     
     /**
      * @brief Get optimization statistics

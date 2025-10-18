@@ -127,11 +127,6 @@ PLYPlayerResult PLYPlayer::run(const PLYPlayerConfig& config) {
                 context.frame_index = current_data.frame_id;
                 context.timestamp = current_data.timestamp;
                 
-                // Console statistics
-                if (config.enable_console_statistics) {
-                    spdlog::info("[PLYPlayer] Frame {}: {:.1f}ms, {} points", 
-                               context.frame_index, processing_time, point_cloud->size());
-                }
             }
         }
         

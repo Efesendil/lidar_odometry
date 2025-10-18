@@ -19,6 +19,7 @@
 #include "../optimization/Parameters.h"
 #include "../optimization/AdaptiveMEstimator.h"
 #include "../optimization/PoseGraphOptimizerGTSAM.h"
+#include "../optimization/PoseGraphOptimizerCeres.h"
 #include "DualFrameICPOptimizer.h"
 #include "LoopClosureDetector.h"
 #include "../util/MathUtils.h"
@@ -249,8 +250,10 @@ private:
     
     // Loop closure detection and pose graph optimization
     std::unique_ptr<LoopClosureDetector> m_loop_detector;
-    std::shared_ptr<optimization::PoseGraphOptimizerGTSAM> m_pose_graph_optimizer;
+    std::shared_ptr<optimization::PoseGraphOptimizerGTSAM> m_pose_graph_optimizer_gtsam;
+    std::shared_ptr<optimization::PoseGraphOptimizerCeres> m_pose_graph_optimizer_ceres;
     int m_last_successful_loop_keyframe_id;  // Last keyframe ID where loop closure succeeded
+    bool m_use_ceres_pgo;  // Flag to switch between GTSAM and Ceres PGO
     std::map<int, SE3f> m_optimized_poses;  // Optimized poses from PGO (for debugging visualization)
     
     // Loop closure storage (to reuse in every PGO)
