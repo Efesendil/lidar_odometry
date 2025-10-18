@@ -243,7 +243,7 @@ bool IterativeClosestPointOptimizer::optimize_loop(std::shared_ptr<database::Lid
             matched_keyframe_copy->get_local_map_kdtree()->nearestKSearch(point_world, 1, indices, sqdist);
 
             // Check if distance is below threshold (0.1m)
-            if (std::sqrt(sqdist[0]) < 0.5f) {
+            if (std::sqrt(sqdist[0]) < 1.0f) {
                 inlier_count++;
             }
             total_count++;
@@ -253,7 +253,7 @@ bool IterativeClosestPointOptimizer::optimize_loop(std::shared_ptr<database::Lid
 
         spdlog::info("[IterativeClosestPointOptimizer] Loop closure optimization inlier ratio: {:.3f}", inlier_ratio);
 
-        if(inlier_ratio < 0.3f)
+        if(inlier_ratio < 0.5f)
         {
             success = false;
         }
