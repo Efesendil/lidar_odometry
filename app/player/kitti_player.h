@@ -139,7 +139,8 @@ struct FrameContext {
     size_t frame_index = 0;
     double timestamp = 0.0;
     std::vector<Eigen::Matrix4f> gt_poses;
-    std::vector<Eigen::Matrix4f> estimated_poses;
+    std::vector<Eigen::Matrix4f> estimated_poses;  // Deprecated: use processed_frames_list instead
+    std::vector<std::shared_ptr<database::LidarFrame>> processed_frames_list; // Use get_pose() for dynamic updates
     Eigen::Matrix4f gt_to_estimated_transform = Eigen::Matrix4f::Identity();
     bool transform_initialized = false;
     
@@ -209,15 +210,6 @@ private:
     std::shared_ptr<lidar_odometry::util::PointCloud> load_point_cloud(const std::string& dataset_path, 
                                                          const std::string& filename);
     
-    /**
-     * @brief Load ground truth poses from KITTI format file
-     * @param gt_path Path to ground truth file
-     * @param frame_list List of frames to match
-     * @return Vector of ground truth poses
-     */
-    std::vector<GroundTruthPose> load_ground_truth_poses(const std::string& gt_path,
-                                                         const std::vector<PointCloudData>& frame_list);
-
     // === System Initialization ===
     
     /**
@@ -363,6 +355,7 @@ private:
 private:
     std::shared_ptr<processing::Estimator> m_estimator;     ///< LiDAR odometry estimator
     std::vector<Eigen::Matrix4f> m_ground_truth_poses;      ///< Ground truth trajectory poses
+    size_t m_last_keyframe_count = 0;                       ///< Track number of keyframes for viewer updates
 };
 
 } // namespace app

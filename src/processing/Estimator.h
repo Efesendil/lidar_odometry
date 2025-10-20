@@ -12,12 +12,16 @@
 #pragma once
 
 #include "../util/Types.h"
+#include "../util/Config.h"
 #include "../database/LidarFrame.h"
 #include "FeatureExtractor.h"
 #include "../optimization/Factors.h"
 #include "../optimization/Parameters.h"
 #include "../optimization/AdaptiveMEstimator.h"
-#include "IterativeClosestPoint.h"
+#include "../optimization/PoseGraphOptimizer.h"
+#include "../optimization/IterativeClosestPointOptimizer.h"
+#include "LoopClosureDetector.h"
+#include "../util/MathUtils.h"
 
 #include <ceres/ceres.h>
 #include <sophus/se3.hpp>
@@ -26,62 +30,18 @@
 #include <vector>
 #include <map>
 #include <deque>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <optional>
+#include <chrono>
 
 namespace lidar_odometry {
 namespace processing {
 
 // Import types from util namespace  
 using namespace lidar_odometry::util;
-
-/**
- * @brief Configuration for the Estimator
- */
-struct EstimatorConfig {
-    // ICP parameters (from YAML odometry section)
-    size_t max_icp_iterations = 50;
-    double icp_translation_threshold = 0.001;  // Translation convergence threshold (meters)
-    double icp_rotation_threshold = 0.001;     // Rotation convergence threshold (radians)
-    double correspondence_distance = 1.0;
-    double transformation_epsilon = 1e-6;
-    double euclidean_fitness_epsilon = 1e-6;
-    
-    // Robust estimation parameters (from YAML robust_estimation section)
-    bool use_adaptive_m_estimator = true;
-    std::string loss_type = "huber";
-    std::string scale_method = "MAD";
-    double fixed_scale_factor = 1.0;
-    double mad_multiplier = 1.4826;
-    double min_scale_factor = 0.01;                // Also used as PKO alpha lower bound
-    double max_scale_factor = 10.0;               // Also used as PKO alpha upper bound
-    
-    // PKO (Probabilistic Kernel Optimization) parameters
-    int num_alpha_segments = 1000;
-    double truncated_threshold = 10.0;
-    int gmm_components = 3;
-    int gmm_sample_size = 100;
-    std::string pko_kernel_type = "cauchy";
-    
-    // Mapping parameters
-    double voxel_size = 0.4;  // Voxel size for input cloud downsampling
-    double map_voxel_size = 0.2;  // Voxel size for map downsampling
-    double max_range = 100.0;  // Max range for crop box filter
-    size_t max_map_frames = 50;
-    double keyframe_distance_threshold = 1.0;
-    double keyframe_rotation_threshold = 0.2;  // radians
-    
-    // Ceres optimization
-    size_t max_solver_iterations = 100;
-    double parameter_tolerance = 1e-8;
-    double function_tolerance = 1e-8;
-    
-    // Feature matching
-    double max_correspondence_distance = 2.0;
-    size_t min_correspondence_points = 10;
-    
-    // Local map parameters
-    size_t local_map_size = 20;
-    double local_map_radius = 50.0;
-};
 
 /**
  * @brief LiDAR odometry estimator
@@ -96,9 +56,9 @@ class Estimator {
 public:
     /**
      * @brief Constructor
-     * @param config Estimator configuration
+     * @param config Configuration from YAML file
      */
-    explicit Estimator(const EstimatorConfig& config = EstimatorConfig());
+    explicit Estimator(const util::SystemConfig& config);
     
     /**
      * @brief Destructor
@@ -118,19 +78,25 @@ public:
      * @brief Update configuration
      * @param config New configuration
      */
-    void update_config(const EstimatorConfig& config);
+    void update_config(const util::SystemConfig& config);
     
     /**
      * @brief Get current configuration
      * @return Current configuration
      */
-    const EstimatorConfig& get_config() const;
+    const util::SystemConfig& get_config() const;
     
     /**
      * @brief Get local map for visualization
      * @return Const pointer to local map
      */
     PointCloudConstPtr get_local_map() const;
+    
+    /**
+     * @brief Get last keyframe's local map for visualization
+     * @return Const pointer to last keyframe's local map, nullptr if no keyframes
+     */
+    PointCloudConstPtr get_last_keyframe_map() const;
 
     /**
     * @brief Get current pose
@@ -139,11 +105,11 @@ public:
     const SE3f& get_current_pose() const;
 
     /**
-     * @brief Get ICP statistics
-     * @param avg_iterations Average iterations per ICP call
-     * @param avg_time_ms Average time per ICP call in milliseconds
+     * @brief Get dual frame optimization statistics
+     * @param avg_iterations Average iterations per optimization call
+     * @param avg_time_ms Average time per optimization call in milliseconds
      */
-    void get_icp_statistics(double& avg_iterations, double& avg_time_ms) const;
+    void get_optimization_statistics(double& avg_iterations, double& avg_time_ms) const;
     
     /**
      * @brief Get debug clouds for visualization
@@ -151,6 +117,43 @@ public:
      * @param post_icp_cloud Output post-ICP cloud
      */
     void get_debug_clouds(PointCloudConstPtr& pre_icp_cloud, PointCloudConstPtr& post_icp_cloud) const;
+    
+    /**
+     * @brief Get number of keyframes
+     * @return Number of keyframes created so far
+     */
+    size_t get_keyframe_count() const;
+    
+    /**
+     * @brief Get keyframe by index
+     * @param index Keyframe index
+     * @return Keyframe at the given index, nullptr if index out of bounds
+     */
+    std::shared_ptr<database::LidarFrame> get_keyframe(size_t index) const;
+    
+    /**
+     * @brief Enable/disable loop closure detection
+     * @param enable Enable loop closure detection
+     */
+    void enable_loop_closure(bool enable);
+    
+    /**
+     * @brief Set loop closure detection configuration
+     * @param config Loop closure configuration
+     */
+    void set_loop_closure_config(const LoopClosureConfig& config);
+    
+    /**
+     * @brief Get loop closure detection statistics
+     * @return Number of loop closures detected
+     */
+    size_t get_loop_closure_count() const;
+    
+    /**
+     * @brief Get optimized trajectory from pose graph optimization (for debugging)
+     * @return Map of keyframe ID to optimized pose (as Eigen::Matrix4f)
+     */
+    std::map<int, Eigen::Matrix4f> get_optimized_trajectory() const;
 
 private:
     // ===== Internal Processing =====
@@ -169,15 +172,22 @@ private:
     void initialize_first_frame(std::shared_ptr<database::LidarFrame> frame);
     
     /**
-     * @brief Estimate motion between frames using ICP
-     * @param current_features Current feature cloud
-     * @param previous_features Previous feature cloud
+     * @brief Estimate motion between frames using DualFrameICPOptimizer
+     * @param current_frame Current frame with features
+     * @param keyframe Reference keyframe with local map
      * @param initial_guess Initial transformation guess
-     * @return Estimated transformation
+     * @return Estimated transformation from keyframe to current
      */
-    SE3f estimate_motion_icp(PointCloudConstPtr current_features,
-                            PointCloudConstPtr previous_features,
-                            const SE3f& initial_guess = SE3f());
+    SE3f estimate_motion_dual_frame(std::shared_ptr<database::LidarFrame> current_frame,
+                                   std::shared_ptr<database::LidarFrame> keyframe,
+                                   const SE3f& initial_guess = SE3f());
+    
+    /**
+     * @brief Select best keyframe for current frame
+     * @param current_pose Current frame pose
+     * @return Best keyframe for optimization, nullptr if none suitable
+     */
+    std::shared_ptr<database::LidarFrame> select_best_keyframe(const SE3f& current_pose);
     
     /**
      * @brief Check if current frame should be a keyframe
@@ -193,16 +203,70 @@ private:
      */
     void create_keyframe(std::shared_ptr<database::LidarFrame> frame);
     
+    /**
+     * @brief Process loop closure candidates and compute relative poses
+     * @param current_keyframe Current keyframe
+     * @param loop_candidates List of loop closure candidates
+     */
+    void process_loop_closures(std::shared_ptr<database::LidarFrame> current_keyframe, 
+                              const std::vector<LoopCandidate>& loop_candidates);
+
+    /**
+     * @brief Apply pose graph optimization results to all keyframes
+     */
+    void apply_pose_graph_optimization();
+
+    /**
+     * @brief Rebuild local map for current keyframe after loop closure
+     * Clears existing local map and rebuilds it from the updated global feature map
+     */
+    void rebuild_current_keyframe_local_map();
+
+    /**
+     * @brief Background thread function for loop detection and PGO
+     * Runs continuously, waiting for loop queries and performing PGO when loops are detected
+     */
+    void loop_pgo_thread_function();
+
+    /**
+     * @brief Apply pending PGO result from background thread (called in main thread)
+     * Checks if there's a pending result and applies it to all keyframes
+     */
+    void apply_pending_pgo_result_if_available();
+
+    /**
+     * @brief Propagate poses to keyframes added after PGO using relative transforms
+     * @param last_optimized_kf_id Last keyframe ID included in PGO
+     */
+    void propagate_poses_after_pgo(int last_optimized_kf_id);
+
+    /**
+     * @brief Transform current keyframe's map using correction transform
+     * @param correction Correction transform to apply
+     */
+    void transform_current_keyframe_map(const SE3f& correction);
+
+    /**
+     * @brief Run PGO for detected loop closure in background thread
+     * @param current_keyframe Current keyframe where loop was detected
+     * @param loop_candidates List of loop closure candidates
+     * @return True if PGO succeeded
+     */
+    bool run_pgo_for_loop(std::shared_ptr<database::LidarFrame> current_keyframe,
+                         const std::vector<LoopCandidate>& loop_candidates);
+
+    
 
 private:
     // Configuration
-    EstimatorConfig m_config;
+    util::SystemConfig m_config;
     
     // State
     bool m_initialized;
     SE3f m_T_wl_current;
     SE3f m_velocity;  // Velocity model: T_current = T_previous * m_velocity
     std::vector<SE3f> m_trajectory;
+    int m_next_keyframe_id;  // Next keyframe ID to assign
     
     // Frames and features
     std::shared_ptr<database::LidarFrame> m_previous_frame;
@@ -216,18 +280,61 @@ private:
     PointCloudPtr m_debug_post_icp_cloud;
     
     // Processing tools
-    std::shared_ptr<IterativeClosestPoint> m_icp;
+    std::shared_ptr<optimization::IterativeClosestPointOptimizer> m_icp_optimizer;
     std::unique_ptr<util::VoxelGrid> m_voxel_filter;
     std::unique_ptr<FeatureExtractor> m_feature_extractor;
     std::shared_ptr<optimization::AdaptiveMEstimator> m_adaptive_estimator;
     
+    // Loop closure detection and pose graph optimization
+    std::unique_ptr<LoopClosureDetector> m_loop_detector;
+    std::shared_ptr<optimization::PoseGraphOptimizer> m_pose_graph_optimizer;
+    int m_last_successful_loop_keyframe_id;  // Last keyframe ID where loop closure succeeded
+    std::map<int, SE3f> m_optimized_poses;  // Optimized poses from PGO (for debugging visualization)
+    
+    // Asynchronous loop detection and PGO
+    std::thread m_loop_pgo_thread;                      // Background thread for loop+PGO
+    std::atomic<bool> m_thread_running{true};           // Thread control flag
+    std::atomic<bool> m_pgo_in_progress{false};         // PGO status flag
+    
+    // Query queue: Main thread → Background thread
+    std::mutex m_query_mutex;
+    std::deque<int> m_loop_query_queue;                 // Keyframe IDs to check for loops
+    std::condition_variable m_query_cv;                 // Wake up background thread
+    
+    // Result queue: Background thread → Main thread
+    std::mutex m_result_mutex;
+    struct PGOResult {
+        int last_optimized_kf_id;                        // Last keyframe ID optimized by PGO
+        std::map<int, SE3f> optimized_poses;             // Optimized absolute poses
+        SE3f last_kf_correction;                         // Correction transform for last keyframe
+        std::chrono::steady_clock::time_point timestamp; // When PGO completed
+    };
+    std::optional<PGOResult> m_pending_result;           // Pending PGO result to apply
+    
+    // Keyframe protection
+    std::mutex m_keyframes_mutex;                        // Protects m_keyframes deque
+    
+    // Loop closure storage
+    struct LoopConstraint {
+        int from_keyframe_id;
+        int to_keyframe_id;
+        SE3f relative_pose;
+        double translation_noise;
+        double rotation_noise;
+    };
+    std::vector<LoopConstraint> m_loop_constraints;  // All detected loop closures
+    
+    // Last keyframe for optimization
+    std::shared_ptr<database::LidarFrame> m_last_keyframe;
+    
     // Last keyframe pose for keyframe decision
     SE3f m_last_keyframe_pose;
     
-    // ICP statistics
-    mutable size_t m_total_icp_iterations;
-    mutable double m_total_icp_time_ms;
-    mutable size_t m_icp_call_count;
+    // Optimization statistics (changed from ICP to dual frame)
+    mutable size_t m_total_optimization_iterations;
+    mutable double m_total_optimization_time_ms;
+    mutable size_t m_optimization_call_count;
+
 };
 
 } // namespace processing

@@ -26,6 +26,7 @@ find_package(Eigen3 REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(Threads REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # Build third-party dependencies from source
 set(THIRDPARTY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty)
@@ -65,22 +66,30 @@ include_directories(
     ${THIRDPARTY_DIR}/ceres-solver/include
     ${CMAKE_BINARY_DIR}/thirdparty/ceres-solver/include
     ${THIRDPARTY_DIR}/nanoflann/include
+    ${THIRDPARTY_DIR}/LidarIris
+    ${OpenCV_INCLUDE_DIRS}
 )
 
-# Source files
-set(LIDAR_ODOMETRY_SOURCES
+# Common source files for all executables
+set(COMMON_SOURCES
     # Database module
     src/database/LidarFrame.cpp
     
     # Processing module
     src/processing/FeatureExtractor.cpp
     src/processing/Estimator.cpp
-    src/processing/IterativeClosestPoint.cpp
+    src/processing/LoopClosureDetector.cpp
+    
+    # Third-party
+    thirdparty/LidarIris/LidarIris.cpp
+    thirdparty/LidarIris/fftm/fftm.cpp
     
     # Optimization module
     src/optimization/Parameters.cpp
     src/optimization/Factors.cpp
     src/optimization/AdaptiveMEstimator.cpp
+    src/optimization/PoseGraphOptimizer.cpp
+    src/optimization/IterativeClosestPointOptimizer.cpp
     
     # Viewer module
     src/viewer/PangolinViewer.cpp
@@ -89,40 +98,72 @@ set(LIDAR_ODOMETRY_SOURCES
     src/util/Config.cpp
     src/util/MathUtils.cpp
     src/util/PointCloudUtils.cpp
-    
-    # Main application
+)
+
+# KITTI LiDAR odometry executable
+set(KITTI_SOURCES
+    ${COMMON_SOURCES}
     app/kitti_lidar_odometry.cpp
     app/player/kitti_player.cpp
 )
 
-# Create executable
-add_executable(lidar_odometry ${LIDAR_ODOMETRY_SOURCES})
+# MID360 LiDAR odometry executable  
+set(MID360_SOURCES
+    ${COMMON_SOURCES}
+    app/mid360_lidar_odometry.cpp
+    app/player/ply_player.cpp
+)
 
-# Link Eigen3 to target
+# Create executables
+add_executable(kitti_lidar_odometry ${KITTI_SOURCES})
+add_executable(mid360_lidar_odometry ${MID360_SOURCES})
+
+# Link Eigen3 to targets
 if(TARGET Eigen3::Eigen)
-    target_link_libraries(lidar_odometry Eigen3::Eigen)
+    target_link_libraries(kitti_lidar_odometry Eigen3::Eigen)
+    target_link_libraries(mid360_lidar_odometry Eigen3::Eigen)
 else()
     # Fallback for older CMake versions
-    target_include_directories(lidar_odometry PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(kitti_lidar_odometry PRIVATE ${EIGEN3_INCLUDE_DIR})
+    target_include_directories(mid360_lidar_odometry PRIVATE ${EIGEN3_INCLUDE_DIR})
 endif()
 
-# Link libraries
-target_link_libraries(lidar_odometry
+# Link libraries for KITTI executable
+target_link_libraries(kitti_lidar_odometry
     OpenGL::GL
     GLEW::GLEW
     Threads::Threads
     ceres
+    tbb
     pango_display
     pango_windowing
     pango_opengl
     pango_core
     pango_image
+    ${OpenCV_LIBS}
     m  # Math library for M_PI
     stdc++fs  # For std::filesystem
 )
 
-# Install target
-install(TARGETS lidar_odometry
+# Link libraries for MID360 executable
+target_link_libraries(mid360_lidar_odometry
+    OpenGL::GL
+    GLEW::GLEW
+    Threads::Threads
+    ceres
+    tbb
+    pango_display
+    pango_windowing
+    pango_opengl
+    pango_core
+    pango_image
+    ${OpenCV_LIBS}
+    m  # Math library for M_PI
+    stdc++fs  # For std::filesystem
+)
+
+# Install targets
+install(TARGETS kitti_lidar_odometry mid360_lidar_odometry
     RUNTIME DESTINATION bin
 )
 

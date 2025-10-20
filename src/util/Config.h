@@ -38,6 +38,7 @@ struct SystemConfig {
     float collinearity_threshold = 0.05f;           ///< Collinearity threshold
     float max_neighbor_distance = 1.0f;             ///< Maximum neighbor search distance
     float feature_quality_threshold = 0.1f;         ///< Minimum quality for valid features
+    float feature_voxel_size = 0.1f;                ///< Voxel size for feature extraction
     
     // ===== Odometry =====
     size_t max_iterations = 20;                     ///< Maximum optimization iterations
@@ -59,7 +60,7 @@ struct SystemConfig {
     // ===== Robust estimation =====
     bool use_adaptive_m_estimator = true;           ///< Enable adaptive M-estimator
     std::string loss_type = "huber";                ///< Loss function type
-    std::string scale_method = "MAD";               ///< Scale factor calculation method ("MAD", "fixed", "std")
+    std::string scale_method = "PKO";               ///< Scale factor calculation method ("MAD", "fixed", "std")
     double fixed_scale_factor = 1.0;               ///< Fixed scale factor when scale_method is "fixed"
     double mad_multiplier = 1.4826;                ///< MAD to standard deviation conversion
     double min_scale_factor = 0.01;                ///< Minimum scale factor (also PKO alpha lower bound)
@@ -108,6 +109,22 @@ struct SystemConfig {
     bool player_enable_console_statistics = true;   ///< Enable console statistics
     bool player_step_mode = false;                  ///< Step-by-step processing mode
     bool player_auto_ground_truth_path = true;      ///< Auto construct GT path from sequence
+    
+    // ===== Loop closure detection =====
+    bool loop_enable_loop_detection = true;         ///< Enable loop closure detection
+    float loop_similarity_threshold = 0.3f;         ///< LiDAR Iris similarity threshold (lower is more similar)
+    int loop_min_keyframe_gap = 50;                 ///< Minimum keyframe ID difference for loop detection
+    float loop_max_search_distance = 10.0f;         ///< Maximum distance (meters) to search for loop candidates
+    bool loop_enable_debug_output = false;          ///< Enable detailed debug logging
+    
+    // Note: Iris parameters will be automatically calculated from max_range
+    
+    // ===== Pose Graph Optimization (PGO) =====
+    bool pgo_enable_pgo = true;                     ///< Enable pose graph optimization
+    double pgo_odometry_translation_noise = 0.5;    ///< Odometry constraint translation noise (lower = more trust)
+    double pgo_odometry_rotation_noise = 0.5;       ///< Odometry constraint rotation noise (lower = more trust)
+    double pgo_loop_translation_noise = 1.0;        ///< Loop closure constraint translation noise (lower = more trust)
+    double pgo_loop_rotation_noise = 1.0;           ///< Loop closure constraint rotation noise (lower = more trust)
     
     SystemConfig() = default;
 };

@@ -72,7 +72,7 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
         // Fill ground truth poses in context (disabled)
         // GT processing disabled - trajectory saved for EVO evaluation
         
-        spdlog::info("[KittiPlayer] Processing frames {} to {} (step mode: {})", 0, point_cloud_data.size(), config.step_mode ? "enabled" : "disabled");
+        // spdlog::info("[KittiPlayer] Processing frames {} to {} (step mode: {})", 0, point_cloud_data.size(), config.step_mode ? "enabled" : "disabled");
         
         context.current_idx = 0;
         while (context.current_idx < point_cloud_data.size()) {
@@ -138,13 +138,13 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
                 ++context.current_idx;
                 ++context.processed_frames;
                 
-                // Sleep in auto mode for real-time visualization
-                if (context.auto_play) {
-                    double sleep_time_ms = 100 - total_time_ms;
-                    if (sleep_time_ms > 0) {
-                        std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
-                    }
-                }
+                // // Sleep in auto mode for real-time visualization
+                // if (context.auto_play) {
+                //     double sleep_time_ms = 100 - total_time_ms;
+                //     if (sleep_time_ms > 0) {
+                //         std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(sleep_time_ms)));
+                //     }
+                // }
             }
         }
         
@@ -166,6 +166,8 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
             save_trajectory_kitti_format(context, kitti_output_path);
             
             // GT evaluation disabled - use EVO tool for evaluation instead
+
+            spdlog::info("[KittiPlayer] Saved trajectory to {}", kitti_output_path);
         }
         
         // 7. Calculate final statistics
@@ -181,7 +183,7 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
         
         // Get ICP statistics from estimator
         double avg_icp_iterations, avg_icp_time_ms;
-        m_estimator->get_icp_statistics(avg_icp_iterations, avg_icp_time_ms);
+        m_estimator->get_optimization_statistics(avg_icp_iterations, avg_icp_time_ms);
         
         spdlog::info("[KittiPlayer] ICP Statistics:");
         spdlog::info("  - Average iterations per ICP: {:.2f}", avg_icp_iterations);
@@ -198,32 +200,14 @@ KittiPlayerResult KittiPlayer::run(const KittiPlayerConfig& config) {
         // Display final statistics summary
         if (config.enable_console_statistics && result.success) {
             spdlog::info("════════════════════════════════════════════════════════════════════");
-            spdlog::info("                          KITTI STATISTICS                          ");
+            spdlog::info("                          TIME STATISTICS                           ");
             spdlog::info("════════════════════════════════════════════════════════════════════");
             spdlog::info(" Total Frames Processed: {}", result.processed_frames);
             spdlog::info(" Average Processing Time: {:.2f}ms", result.average_processing_time_ms);
             double fps = 1000.0 / result.average_processing_time_ms;
             spdlog::info(" Average Frame Rate: {:.1f}fps", fps);
             
-            // Calculate and display trajectory errors (Python script style)
-            if (config.enable_statistics && !display_output_path.empty()) {
-                try {
-                    auto errors = calculate_trajectory_errors(display_output_path);
-                    spdlog::info("════════════════════════════════════════════════════════════════════");
-                    spdlog::info("                         EVALUATION RESULTS                         ");
-                    spdlog::info("════════════════════════════════════════════════════════════════════");
-                    spdlog::info(" Translation Error: {:.2f}%", errors.translation_error * 100);
-                    spdlog::info(" Rotation Error:    {:.2f} deg/100m", errors.rotation_error / M_PI * 180 * 100);
-                    spdlog::info("════════════════════════════════════════════════════════════════════");
-                } catch (const std::exception& e) {
-                    spdlog::warn(" Could not calculate trajectory errors: {}", e.what());
-                }
-            }
-            
-            if (!display_output_path.empty()) {
-                spdlog::info(" Trajectory saved as: {}", display_output_path);
-                spdlog::info("════════════════════════════════════════════════════════════════════");
-            }
+           
         }
         
         // Wait for viewer finish if enabled
@@ -348,43 +332,6 @@ util::PointCloud::Ptr KittiPlayer::load_point_cloud(const std::string& dataset_p
     return point_cloud;
 }
 
-std::vector<GroundTruthPose> KittiPlayer::load_ground_truth_poses(const std::string& gt_path,
-                                                                  const std::vector<PointCloudData>& frame_list) {
-    std::vector<GroundTruthPose> gt_poses;
-    
-    std::ifstream file(gt_path);
-    if (!file.is_open()) {
-        spdlog::error("[KittiPlayer] Cannot open ground truth file: {}", gt_path);
-        return gt_poses;
-    }
-    
-    // KITTI Tr transformation matrix (Camera to Velodyne)
-    Eigen::Matrix4f Tr = Eigen::Matrix4f::Identity();
-    Tr(0, 0) = -1.857739385241e-03; Tr(0, 1) = -9.999659513510e-01; Tr(0, 2) = -8.039975204516e-03; Tr(0, 3) = -4.784029760483e-03;
-    Tr(1, 0) = -6.481465826011e-03; Tr(1, 1) = 8.051860151134e-03;  Tr(1, 2) = -9.999466081774e-01; Tr(1, 3) = -7.337429464231e-02;
-    Tr(2, 0) = 9.999773098287e-01;  Tr(2, 1) = -1.805528627661e-03; Tr(2, 2) = -6.496203536139e-03; Tr(2, 3) = -3.339968064433e-01;
-    
-    std::string line;
-    int line_idx = 0;
-    
-    while (std::getline(file, line) && line_idx < static_cast<int>(frame_list.size())) {
-        if (line.empty()) continue;
-        
-        // Find corresponding frame
-        int target_frame_id = frame_list[line_idx].frame_id;
-        
-        GroundTruthPose gt_pose;
-        gt_pose.frame_id = target_frame_id;
-        gt_pose.pose = Tr.inverse() * parse_kitti_pose(line);  // Apply Tr transformation
-        gt_poses.push_back(gt_pose);
-        
-        ++line_idx;
-    }
-    
-    file.close();
-    return gt_poses;
-}
-
 std::shared_ptr<viewer::PangolinViewer> KittiPlayer::initialize_viewer(const KittiPlayerConfig& config) {
     if (!config.enable_viewer) {
         return nullptr;
@@ -408,42 +355,8 @@ std::shared_ptr<viewer::PangolinViewer> KittiPlayer::initialize_viewer(const Kit
 }
 
 void KittiPlayer::initialize_estimator(const util::SystemConfig& config) {
-    // Convert SystemConfig to EstimatorConfig
-    processing::EstimatorConfig estimator_config;
-    
-    // Map system config values to estimator config
-    estimator_config.max_icp_iterations = config.max_iterations;
-    estimator_config.icp_translation_threshold = config.translation_threshold;
-    estimator_config.icp_rotation_threshold = config.rotation_threshold;
-    estimator_config.correspondence_distance = config.max_correspondence_distance;
-    estimator_config.voxel_size = config.voxel_size;
-    estimator_config.map_voxel_size = config.map_voxel_size;
-    estimator_config.max_range = config.max_range;
-    estimator_config.keyframe_distance_threshold = config.keyframe_distance_threshold;
-    estimator_config.keyframe_rotation_threshold = config.keyframe_rotation_threshold;
-    estimator_config.max_solver_iterations = config.max_solver_iterations;
-    estimator_config.parameter_tolerance = config.parameter_tolerance;
-    estimator_config.function_tolerance = config.function_tolerance;
-    estimator_config.max_correspondence_distance = config.max_correspondence_distance;
-    estimator_config.min_correspondence_points = config.min_correspondence_points;
-    
-    // Map robust estimation settings
-    estimator_config.use_adaptive_m_estimator = config.use_adaptive_m_estimator;
-    estimator_config.loss_type = config.loss_type;
-    estimator_config.scale_method = config.scale_method;
-    estimator_config.fixed_scale_factor = config.fixed_scale_factor;
-    estimator_config.mad_multiplier = config.mad_multiplier;
-    estimator_config.min_scale_factor = config.min_scale_factor;
-    estimator_config.max_scale_factor = config.max_scale_factor;
-    
-    // Map PKO/GMM parameters (CRITICAL: was missing!)
-    estimator_config.num_alpha_segments = config.num_alpha_segments;
-    estimator_config.truncated_threshold = config.truncated_threshold;
-    estimator_config.gmm_components = config.gmm_components;
-    estimator_config.gmm_sample_size = config.gmm_sample_size;
-    estimator_config.pko_kernel_type = config.pko_kernel_type;
-    
-    m_estimator = std::make_shared<processing::Estimator>(estimator_config);
+    // Create estimator directly with SystemConfig
+    m_estimator = std::make_unique<processing::Estimator>(config);
     spdlog::info("[KittiPlayer] Estimator initialized");
 }
 
@@ -460,7 +373,10 @@ double KittiPlayer::process_single_frame(std::shared_ptr<lidar_odometry::util::P
     // Store the processed frame in context
     context.current_lidar_frame = lidar_frame;
     
-    // Store estimated pose
+    // Store frame for dynamic pose evaluation (use get_pose() later)
+    context.processed_frames_list.push_back(lidar_frame);
+    
+    // Store estimated pose (for backward compatibility)
     if (result) {
         // Get pose from the processed frame and convert SE3f to Matrix4f
         const auto& se3_pose = lidar_frame->get_pose();
@@ -497,20 +413,20 @@ void KittiPlayer::update_viewer(viewer::PangolinViewer& viewer,
                                util::PointCloudPtr point_cloud) {
     if (context.estimated_poses.empty()) return;
     
-    // Update current pose
-    Eigen::Matrix4f current_pose = context.estimated_poses.back();
-    viewer.add_trajectory_pose(current_pose);
-    
     // Use the processed LidarFrame from context instead of creating a new one
     if (context.current_lidar_frame) {
         viewer.update_current_frame(context.current_lidar_frame);
+        // Add frame to trajectory for dynamic pose updates
+        viewer.add_trajectory_frame(context.current_lidar_frame);
     } else {
         spdlog::warn("[KittiPlayer] No processed LidarFrame available in context");
         // Fallback: create new frame with estimated pose
+        Eigen::Matrix4f current_pose = context.estimated_poses.back();
         auto lidar_frame = std::make_shared<database::LidarFrame>(context.frame_index, context.timestamp, point_cloud);
         Sophus::SE3f se3_pose(current_pose);
         lidar_frame->set_pose(se3_pose);
         viewer.update_current_frame(lidar_frame);
+        viewer.add_trajectory_frame(lidar_frame);
     }
     
     // Update map points from estimator
@@ -520,11 +436,37 @@ void KittiPlayer::update_viewer(viewer::PangolinViewer& viewer,
             viewer.update_map_points(local_map);
         }
         
+        // Check for new keyframes and add to viewer
+        size_t current_keyframe_count = m_estimator->get_keyframe_count();
+        if (current_keyframe_count > m_last_keyframe_count) {
+            // Add new keyframes to viewer
+            for (size_t i = m_last_keyframe_count; i < current_keyframe_count; ++i) {
+                auto keyframe = m_estimator->get_keyframe(i);
+                if (keyframe) {
+                    viewer.add_keyframe(keyframe);
+                    // spdlog::info("[KittiPlayer] Added keyframe {} to viewer", keyframe->get_frame_id());
+                }
+            }
+            m_last_keyframe_count = current_keyframe_count;
+        }
+        
+        // Update last keyframe for local map visualization
+        auto last_keyframe = m_estimator->get_keyframe(m_estimator->get_keyframe_count() - 1);
+        if (last_keyframe) {
+            viewer.update_last_keyframe(last_keyframe);
+        }
+        
         // Update ICP debug clouds if available
         PointCloudConstPtr pre_icp_cloud, post_icp_cloud;
         m_estimator->get_debug_clouds(pre_icp_cloud, post_icp_cloud);
         if (pre_icp_cloud && post_icp_cloud) {
             viewer.update_icp_debug_clouds(pre_icp_cloud, post_icp_cloud);
+        }
+        
+        // Update optimized trajectory for debugging (GREEN line)
+        auto optimized_trajectory = m_estimator->get_optimized_trajectory();
+        if (!optimized_trajectory.empty()) {
+            viewer.update_optimized_trajectory(optimized_trajectory);
         }
     }
     
@@ -573,7 +515,9 @@ void KittiPlayer::save_trajectory_kitti_format(const FrameContext& context,
         return;
     }
     
-    for (const auto& pose : context.estimated_poses) {
+    // Use processed_frames_list and get_pose() for dynamic post-PGO poses
+    for (const auto& frame : context.processed_frames_list) {
+        Eigen::Matrix4f pose = frame->get_pose().matrix();
         file << pose_to_kitti_string(pose) << std::endl;
     }
     
@@ -589,8 +533,9 @@ void KittiPlayer::save_trajectory_tum_format(const FrameContext& context,
         return;
     }
     
-    for (size_t i = 0; i < context.estimated_poses.size(); ++i) {
-        const auto& pose = context.estimated_poses[i];
+    // Use processed_frames_list and get_pose() for dynamic post-PGO poses
+    for (size_t i = 0; i < context.processed_frames_list.size(); ++i) {
+        Eigen::Matrix4f pose = context.processed_frames_list[i]->get_pose().matrix();
         
         Eigen::Vector3f translation = pose.block<3,1>(0,3);
         Eigen::Matrix3f rotation = pose.block<3,3>(0,0);
@@ -611,23 +556,24 @@ void KittiPlayer::save_trajectory_tum_format(const FrameContext& context,
 KittiPlayerResult::ErrorStats KittiPlayer::analyze_trajectory_errors(const FrameContext& context) {
     KittiPlayerResult::ErrorStats stats;
     
-    if (context.gt_poses.empty() || context.estimated_poses.empty()) {
+    if (context.gt_poses.empty() || context.processed_frames_list.empty()) {
         return stats;
     }
     
     // KITTI evaluation lengths in meters
     std::vector<float> lengths = {100, 200, 300, 400, 500, 600, 700, 800};
-    size_t min_size = std::min(context.gt_poses.size(), context.estimated_poses.size());
+    size_t min_size = std::min(context.gt_poses.size(), context.processed_frames_list.size());
     
     std::vector<double> translation_errors_percent;
     std::vector<double> rotation_errors_deg_per_100m;
     std::vector<double> ate_errors;
     
     // Create poses dict-style for compatibility with KITTI evaluation
+    // Use get_pose() to get dynamic poses after PGO
     std::map<int, Eigen::Matrix4f> poses_gt, poses_result;
     for (size_t i = 0; i < min_size; ++i) {
         poses_gt[i] = context.gt_poses[i];
-        poses_result[i] = context.estimated_poses[i];
+        poses_result[i] = context.processed_frames_list[i]->get_pose().matrix();
     }
     
     // KITTI-style first frame alignment

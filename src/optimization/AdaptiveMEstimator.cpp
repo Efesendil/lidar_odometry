@@ -223,9 +223,9 @@ void AdaptiveMEstimator::initialize_pko() {
     m_alpha_candidates.resize(m_config.num_alpha_segments + 1);
     m_partition_functions.resize(m_config.num_alpha_segments + 1);
     
-    // 첫 번째 값 (백업에서는 alpha_upper_bound의 partition function을 첫 번째에 사용)
+    // 첫 번째 값은 min_scale_factor와 그에 해당하는 partition function
     m_alpha_candidates[0] = m_config.min_scale_factor;
-    m_partition_functions[0] = calculate_partition_function(m_config.max_scale_factor); // 백업과 동일
+    m_partition_functions[0] = calculate_partition_function(m_config.min_scale_factor);
     
     // 나머지 값들 (log scaling)
     for (int i = 1; i <= m_config.num_alpha_segments; ++i) {
@@ -253,14 +253,14 @@ double AdaptiveMEstimator::calculate_pko_scale_factor(const std::vector<double>&
     // Fit GMM to residual distribution
     fit_gmm(residuals);
     
-    // Find optimal alpha that minimizes JS divergence (백업과 동일한 방식)
     double best_alpha = m_config.min_scale_factor;
     double best_cost = std::numeric_limits<double>::max();
     
-    // 모든 alpha candidates를 고려하여 최적의 JS divergence를 찾음
     for (size_t i = 1; i < m_alpha_candidates.size(); ++i) {
         double alpha = m_alpha_candidates[i];
 
+
+        // To assure graduated non-convexity
         if(alpha >= m_alpha_star_ref)
             continue;
         
@@ -318,8 +318,8 @@ void AdaptiveMEstimator::fit_gmm(const std::vector<double>& residuals) {
     // 2. 데이터에서 임의로 샘플 추출 (백업과 완전히 동일)
     std::vector<int> indices(n);
     std::iota(indices.begin(), indices.end(), 0);
-    std::random_device rd;
-    std::mt19937 g(rd()); // 백업과 동일: 실제 랜덤 시드
+    // Use fixed seed for consistent results
+    std::mt19937 g(42); // Fixed seed instead of random_device
     std::shuffle(indices.begin(), indices.end(), g);
 
     std::vector<double> sampled_data(sample_size);
@@ -332,9 +332,8 @@ void AdaptiveMEstimator::fit_gmm(const std::vector<double>& residuals) {
     
     // 3. 파라미터 초기화 (백업과 완전히 동일)
     
-    // K-means 초기화 (백업 함수와 동일)
-    std::random_device rd2;
-    std::mt19937 gen(42);
+    // K-means 초기화 (fixed seed for consistency)
+    std::mt19937 gen(42); // Fixed seed
     std::uniform_int_distribution<> dis(0, sampled_data.size() - 1);
 
     m_gmm_means.resize(m_config.gmm_components);
@@ -501,8 +500,7 @@ void AdaptiveMEstimator::kmeans_init(const std::vector<double>& residuals) {
     // 데이터에서 임의로 샘플 추출
     std::vector<int> indices(n);
     std::iota(indices.begin(), indices.end(), 0);
-    std::random_device rd;
-    std::mt19937 g(rd());
+    std::mt19937 g(42); // Fixed seed for consistency
     std::shuffle(indices.begin(), indices.end(), g);
 
     std::vector<double> sampled_data(sample_size);
@@ -528,8 +526,7 @@ void AdaptiveMEstimator::kmeans_init(const std::vector<double>& residuals) {
         // Pick이 부족하면 기존 K-means++ 방식 사용
         spdlog::debug("[AdaptiveMEstimator] Insufficient picks ({}), using K-means++ initialization", picks.size());
         
-        std::random_device rd2;
-        std::mt19937 gen(42);
+        std::mt19937 gen(42); // Fixed seed for consistency
         std::uniform_int_distribution<> dis(0, sampled_data.size() - 1);
 
         for (int i = 0; i < m_config.gmm_components; ++i) {

@@ -117,10 +117,34 @@ public:
                                 PointCloudConstPtr post_icp_cloud);
     
     /**
-     * @brief Add pose to trajectory
-     * @param pose Pose to add to trajectory
+     * @brief Add keyframe for visualization (uses get_pose() for dynamic update)
+     * @param keyframe Frame object to add as keyframe
      */
-    void add_trajectory_pose(const Matrix4f& pose);
+    void add_keyframe(std::shared_ptr<database::LidarFrame> keyframe);
+    
+    /**
+     * @brief Clear all keyframes
+     */
+    void clear_keyframes();
+    
+    /**
+     * @brief Update last keyframe for local map visualization
+     * @param last_keyframe Last keyframe pointer (will use get_local_map())
+     */
+    void update_last_keyframe(std::shared_ptr<database::LidarFrame> last_keyframe);
+    
+    /**
+     * @brief Add frame to trajectory (will use get_pose() for dynamic update)
+     * @param frame Frame to add to trajectory
+     */
+    void add_trajectory_frame(std::shared_ptr<database::LidarFrame> frame);
+    
+    /**
+     * @brief Update optimized trajectory from pose graph optimization
+     * @param optimized_poses Map of keyframe ID to optimized pose
+     */
+    void update_optimized_trajectory(const std::map<int, Matrix4f>& optimized_poses);
+    
     // ===== UI Controls =====
     
     /**
@@ -157,12 +181,17 @@ private:
     
     // ===== Data Storage =====
     std::shared_ptr<database::LidarFrame> m_current_frame;  ///< Current LiDAR frame
-    std::vector<Matrix4f> m_trajectory;                     ///< Estimated camera trajectory
+    std::vector<std::shared_ptr<database::LidarFrame>> m_trajectory_frames; ///< All frames for trajectory (use get_pose() for dynamic update)
+    std::vector<Matrix4f> m_optimized_trajectory;           ///< PGO optimized trajectory (for debugging)
+    
+    // ===== Keyframe Data =====
+    std::vector<std::shared_ptr<database::LidarFrame>> m_keyframes; ///< Keyframe objects (use get_pose() for dynamic update)
     
     // ===== New Visualization Data =====
     PointCloudConstPtr m_map_cloud;                        ///< Map points (world coordinate) - Gray
     PointCloudConstPtr m_pre_icp_cloud;                    ///< Pre-ICP lidar features (world) - Blue  
     PointCloudConstPtr m_post_icp_cloud;                   ///< Post-ICP lidar features (world) - Red
+    std::shared_ptr<database::LidarFrame> m_last_keyframe; ///< Last keyframe for local map visualization
     
     // ===== Thread Safety =====
     mutable std::mutex m_data_mutex;
@@ -174,10 +203,11 @@ private:
     
     // ===== UI Variables =====
     pangolin::Var<bool> m_auto_mode;                   ///< Auto mode checkbox
-    pangolin::Var<bool> m_show_map_points;             ///< Show map points checkbox (Gray)
     pangolin::Var<bool> m_show_point_cloud;            ///< Show LiDAR point cloud (Red-Blue)
     pangolin::Var<bool> m_show_features;               ///< Show LiDAR features (Mint)
     pangolin::Var<bool> m_show_trajectory;             ///< Show estimated trajectory checkbox
+    pangolin::Var<bool> m_show_keyframes;              ///< Show keyframes checkbox
+    pangolin::Var<bool> m_show_keyframe_map;           ///< Show last keyframe map checkbox
     pangolin::Var<bool> m_show_coordinate_frame;       ///< Show coordinate frame checkbox
     pangolin::Var<bool> m_top_view_follow;             ///< Top-down view follow mode checkbox
     pangolin::Var<bool> m_step_forward_button;         ///< Step forward button
@@ -261,6 +291,22 @@ private:
      * @param trajectory Vector of poses forming the trajectory
      */
     void draw_trajectory_with_data(const std::vector<Matrix4f>& trajectory);
+    
+    /**
+     * @brief Draw trajectory with frame objects (uses get_pose() for dynamic update)
+     * @param frames Vector of frames forming the trajectory
+     */
+    void draw_trajectory_with_frames(const std::vector<std::shared_ptr<database::LidarFrame>>& frames);
+    
+    /**
+     * @brief Draw keyframes as coordinate axes
+     */
+    void draw_keyframes();
+    
+    /**
+     * @brief Draw last keyframe map points as large points
+     */
+    void draw_last_keyframe_map();
     
     /**
      * @brief Draw current pose
